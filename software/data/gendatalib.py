@@ -11,6 +11,7 @@
 # propagated though a python golden model. Golden models are from the
 # numpy library or the qmath bit-true library.
 
+import pyflexfloat as ff # Caroline
 import numpy as np
 import math
 import qmath
@@ -70,7 +71,27 @@ def generate_faxpy(my_type=np.float32, defines={}):
     A = np.random.rand(1) - 0.5
     X = (np.random.rand(array_N) - 0.5).astype(my_type)
     Y = (np.random.rand(array_N) - 0.5).astype(my_type)
-    Z = (Y + X * A).astype(my_type)
+
+    # Caroline
+    # f8: Cast correct type
+    if my_type == ff.FlexFloat('e5m2'):
+        
+        # Create matrix
+        Z = (np.empty(array_N)).astype(my_type)
+        
+        # Casting the correct type
+        A = ff.FlexFloat('e5m2', A[0]);
+        for i in range(array_N):
+            X[i] = ff.FlexFloat('e5m2', X[i])
+            Y[i] = ff.FlexFloat('e5m2', Y[i])
+        
+        # for f8: Use special operation that retains the FP type
+        for i in range(array_N):
+            Z[i] = Y[i] + X[i] * A
+
+    # f16,f32: Use normal operation (FP type automatically retained)
+    else:
+        Z = (Y + X * A).astype(my_type)
 
     return [A, X, Y, Z], defines
 
