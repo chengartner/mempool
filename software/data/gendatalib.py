@@ -66,31 +66,34 @@ def generate_iarray(my_type=np.float32, defines={}):
 
 def generate_faxpy(my_type=np.float32, defines={}):
 
-    # Create matrix
-    array_N = defines['array_N']
-    A = np.random.rand(1) - 0.5
-    X = (np.random.rand(array_N) - 0.5).astype(my_type)
-    Y = (np.random.rand(array_N) - 0.5).astype(my_type)
-
     # Caroline
     # f8: Cast correct type
     if my_type == ff.FlexFloat('e5m2'):
         
-        # Create matrix
-        Z = (np.empty(array_N)).astype(my_type)
+        # Create matrix (with type numpy)
+        array_N = defines['array_N']
+        A = (np.random.rand(1) - 0.5).astype(np.float16)
+        X = (np.random.rand(array_N) - 0.5).astype(np.float16)
+        Y = (np.random.rand(array_N) - 0.5).astype(np.float16)
+        Z = np.zeros(array_N).astype(np.float32) # TODODOODODODO
         
         # Casting the correct type
-        A = ff.FlexFloat('e5m2', A[0]);
-        for i in range(array_N):
-            X[i] = ff.FlexFloat('e5m2', X[i])
-            Y[i] = ff.FlexFloat('e5m2', Y[i])
+        A = ff.array(A, 'e5m2')
+        X = ff.array(X, 'e5m2')
+        Y = ff.array(Y, 'e5m2')
+        Z = ff.array(Z, 'e5m2')
         
         # for f8: Use special operation that retains the FP type
         for i in range(array_N):
-            Z[i] = Y[i] + X[i] * A
+            Z[i] = Y[i] + X[i] * A[0]
 
     # f16,f32: Use normal operation (FP type automatically retained)
     else:
+        # Create matrix
+        array_N = defines['array_N']
+        A = (np.random.rand(1) - 0.5).astype(my_type)
+        X = (np.random.rand(array_N) - 0.5).astype(my_type)
+        Y = (np.random.rand(array_N) - 0.5).astype(my_type)
         Z = (Y + X * A).astype(my_type)
 
     return [A, X, Y, Z], defines
