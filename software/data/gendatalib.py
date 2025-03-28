@@ -75,17 +75,13 @@ def generate_faxpy(my_type=np.float32, defines={}):
         A = (np.random.rand(1) - 0.5).astype(np.float16)
         X = (np.random.rand(array_N) - 0.5).astype(np.float16)
         Y = (np.random.rand(array_N) - 0.5).astype(np.float16)
-        Z = np.zeros(array_N).astype(np.float32) # TODODOODODODO
         
-        # Casting the correct type
+        # Cast the correct type
         A = ff.array(A, 'e5m2')
         X = ff.array(X, 'e5m2')
         Y = ff.array(Y, 'e5m2')
-        Z = ff.array(Z, 'e5m2')
         
-        # for f8: Use special operation that retains the FP type
-        for i in range(array_N):
-            Z[i] = Y[i] + X[i] * A[0]
+        Z = Y + X * A
 
     # f16,f32: Use normal operation (FP type automatically retained)
     else:
