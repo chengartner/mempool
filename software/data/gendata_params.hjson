@@ -46,7 +46,7 @@
   },
 
   "axpy_f8": {
-    "type": "float8_small",
+    "type": "float8_e5m2",
     "defines": [
       ("array_N", 1024)
     ]
@@ -225,6 +225,20 @@
       ("int32_t", "l2_X")
       ("int32_t", "l2_Y")
       ("int32_t", "l2_Z")
+    ]
+  },
+
+  "matmul_f8": {
+    "type": "float8_e5m2",
+    "defines": [
+      ("matrix_M", 32)
+      ("matrix_N", 32)
+      ("matrix_P", 32)
+    ]
+    "arrays": [
+      ("__fp8", "l2_A")
+      ("__fp8", "l2_B")
+      ("__fp8", "l2_C")
     ]
   },
 

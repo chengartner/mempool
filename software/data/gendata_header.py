@@ -136,7 +136,7 @@ def get_type(type_string):
         return numpy.float16
     elif type_string == "float8":
         return numpy.float16
-    elif type_string == "float8_small":     # Caroline
+    elif type_string == "float8_e5m2":
         return ff.FlexFloat('e5m2')
     else:
         raise Exception("Input type is not valid")
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     # Define function mappings for each app_name
     function_map = {
         "axpy_i32": {"func": datalib.generate_iaxpy},
-        "axpy_f8": {"func": datalib.generate_faxpy}, # Caroline
+        "axpy_f8": {"func": datalib.generate_faxpy},
         "axpy_f16": {"func": datalib.generate_faxpy},
         "axpy_f32": {"func": datalib.generate_faxpy},
         "cfft_radix2_q16": {"func": datalib.generate_cfft_q16},
@@ -185,8 +185,8 @@ if __name__ == '__main__':
         "dotp_f16": {"func": datalib.generate_fdotp},
         "dotp_f32": {"func": datalib.generate_fdotp},
         "dotp_i32": {"func": datalib.generate_idotp},
-        "matmul_f16": {"func": datalib.generate_fmatmul},
         "matmul_f8": {"func": datalib.generate_fmatmul},
+        "matmul_f16": {"func": datalib.generate_fmatmul},
         "matmul_f32": {"func": datalib.generate_fmatmul},
         "matmul_i32": {"func": datalib.generate_imatmul},
         "matmul_i16": {"func": datalib.generate_imatmul},
