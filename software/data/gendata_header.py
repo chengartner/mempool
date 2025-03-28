@@ -53,9 +53,8 @@ def format_type(typ, value):
     elif typ == '__fp8':
         value = numpy.array([value]).astype(numpy.double) # Caroline
         value = ff.FlexFloat("e5m2", value[0])
-        #value = ff.FlexFloat("e5m2", value.astype(numpy.double))
         value = value.bits()
-        stringyfied_val = '({}) 0X{}'.format(typ, value)
+        stringyfied_val = '({}) 0X{:02X}'.format(typ, value)
     else:
         raise Exception("ERROR: Unsupported data type!!!")
 
