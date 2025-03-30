@@ -68,7 +68,7 @@ xpulpimg ?= 1
 zfinx ?= 1
 
 # Enable FPU extensions
-zquarterinx ?= 0
+zquarterinx ?= 1
 
 # DivSqrt deactivated by default
 xDivSqrt ?= 0
