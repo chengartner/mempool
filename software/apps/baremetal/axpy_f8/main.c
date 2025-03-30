@@ -11,6 +11,9 @@
 #include "printf.h"
 #include "runtime.h"
 #include "synchronization.h"
+#include "builtins_v2.h"
+
+//dump(try, 8);
 
 #include "data_axpy_f8.h"
 
@@ -39,17 +42,18 @@ int main() {
   // PARALLEL, LOCAL ACCESSES
   time_init = mempool_get_timer();
   mempool_start_benchmark();
-  axpy_f8vecp_local_unrolled4(a, l1_X, l1_Y, array_N); //TODO!!!!
+  axpy_f8vecp_local_unrolled4(a, l1_X, l1_Y, array_N);
   mempool_stop_benchmark();
   time_end = mempool_get_timer();
 
   mempool_barrier(num_cores);
   // Check results
   if (core_id == 0) {
+    //dump_try(*(uint32_t*)&l1_Y[0]);
     uint32_t clock_cycles = (time_end - time_init);
     printf("\nKernel execution takes %d clock cycles\n", clock_cycles);
   }
-  mempool_check_f8(l1_Y, l2_Z, 100, 0.1f, 0); //TODO!!!
+  mempool_check_f8(l1_Y, l2_Z, 100, 0.1f, 1);
   mempool_barrier(num_cores);
 
   return 0;
