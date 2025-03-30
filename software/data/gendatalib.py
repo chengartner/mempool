@@ -67,7 +67,7 @@ def generate_iarray(my_type=np.float32, defines={}):
 def generate_faxpy(my_type=np.float32, defines={}):
 
     # f8: Cast correct type
-    if my_type == ff.FlexFloat('e5m2'):
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
         
         # Create matrix (with type numpy)
         array_N = defines['array_N']
@@ -242,7 +242,7 @@ def generate_fcmatmul(my_type=np.float32, defines={}):
 def generate_fmatmul(my_type=np.float32, defines={}):
 
     # f8: Cast correct type
-    if my_type == ff.FlexFloat('e5m2'):
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
         
         # Define dimension
         matrix_M = defines['matrix_M']
