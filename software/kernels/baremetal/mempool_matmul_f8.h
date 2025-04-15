@@ -159,7 +159,6 @@ void matmul_2x4_parallel_inner_f8vec(const __fp8 *__restrict__ A,
       float volatile sum11 = 0.0f;
       float volatile sum12 = 0.0f;
       float volatile sum13 = 0.0f;
-      float volatile sumTemp = 0.0f;
       for (j = 0; j < N; j += 4) {
 
         v4b aVec0 = *(v4b *)&(A[i * N + j]);            // aVec0 = [a03 a02 a01 a00]
@@ -169,7 +168,7 @@ void matmul_2x4_parallel_inner_f8vec(const __fp8 *__restrict__ A,
         v4b bVecTemp1 = *(v4b *)&(B[(j + 1) * P + k]);  // bVecTemp1 = [b13 b12 b11 b10]
         v4b bVecTemp2 = *(v4b *)&(B[(j + 2) * P + k]);  // bVecTemp2 = [b23 b22 b21 b20]
         v4b bVecTemp3 = *(v4b *)&(B[(j + 3) * P + k]);  // bVecTemp3 = [b33 b32 b31 b30]
-        //dump_try(*(uint32_t*)&bVecTemp3);
+        dump_try(*(uint32_t*)&bVecTemp0);
         v4b bVec0, bVec1, bVec2, bVec3, bVecLow0, bVecLow1, bVecLow2, bVecLow3;
         unsigned TempShuffle1 = 0x05070406; // [a b c d] => [c a d b]
         unsigned TempShuffle2 = 0x05040706; // [a b c d] => [c d a b]
@@ -220,52 +219,43 @@ void matmul_2x4_parallel_inner_f8vec(const __fp8 *__restrict__ A,
         //dump_try(*(uint32_t*)&bVec3);
 
         asm volatile(
-            "vfdotpexa.s.b %[sum00], %[aVec0], %[bVec0];"   // res0 = a00*b00 + a01*b10
-            "vfdotpexb.s.b %[sumTemp], %[aVec0], %[bVec0];" // res1 = a02*b20 + a03*b30
-            "fadd.s %[sum00], %[sum00], %[sumTemp];"        // sum00 = res0 + res1
+            "vfdotpexa.s.b %[sum00], %[aVec0], %[bVec0];"   // res0 += a00*b00 + a01*b10
+            "vfdotpexb.s.b %[sum00], %[aVec0], %[bVec0];"   // res0 += a02*b20 + a03*b30
             "vfdotpexa.s.b %[sum01], %[aVec0], %[bVec1];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec0], %[bVec1];"
-            "fadd.s %[sum01], %[sum01], %[sumTemp];"
+            "vfdotpexb.s.b %[sum01], %[aVec0], %[bVec1];"
             "vfdotpexa.s.b %[sum02], %[aVec0], %[bVec2];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec0], %[bVec2];"
-            "fadd.s %[sum02], %[sum02], %[sumTemp];"            
+            "vfdotpexb.s.b %[sum02], %[aVec0], %[bVec2];"
             "vfdotpexa.s.b %[sum03], %[aVec0], %[bVec3];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec0], %[bVec3];"
-            "fadd.s %[sum03], %[sum03], %[sumTemp];"            
+            "vfdotpexb.s.b %[sum03], %[aVec0], %[bVec3];"
             "vfdotpexa.s.b %[sum10], %[aVec1], %[bVec0];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec1], %[bVec0];"
-            "fadd.s %[sum10], %[sum03], %[sumTemp];"
+            "vfdotpexb.s.b %[sum10], %[aVec1], %[bVec0];"
             "vfdotpexa.s.b %[sum11], %[aVec1], %[bVec1];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec1], %[bVec1];"
-            "fadd.s %[sum11], %[sum03], %[sumTemp];"
+            "vfdotpexb.s.b %[sum11], %[aVec1], %[bVec1];"
             "vfdotpexa.s.b %[sum12], %[aVec1], %[bVec2];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec1], %[bVec2];"
-            "fadd.s %[sum12], %[sum03], %[sumTemp];"
+            "vfdotpexb.s.b %[sum12], %[aVec1], %[bVec2];"
             "vfdotpexa.s.b %[sum13], %[aVec1], %[bVec3];"
-            "vfdotpexb.s.b %[sumTemp], %[aVec1], %[bVec3];"
-            "fadd.s %[sum13], %[sum03], %[sumTemp];"
+            "vfdotpexb.s.b %[sum13], %[aVec1], %[bVec3];"
             : [sum00] "+&r"(sum00), [sum01] "+&r"(sum01), [sum02] "+&r"(sum02), [sum03] "+&r"(sum03),
-              [sum10] "+&r"(sum10), [sum11] "+&r"(sum11), [sum12] "+&r"(sum12), [sum13] "+&r"(sum13),
-              [sumTemp] "+&r"(sumTemp)
+              [sum10] "+&r"(sum10), [sum11] "+&r"(sum11), [sum12] "+&r"(sum12), [sum13] "+&r"(sum13)
             : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), 
               [bVec0] "r"(bVec0), [bVec1] "r"(bVec1), [bVec2] "r"(bVec2), [bVec3] "r"(bVec3));
       }
 
-      dump_try(*(uint32_t*)&sum00);
-      dump_try(*(uint32_t*)&sum01);
-      dump_try(*(uint32_t*)&sum02);
-      dump_try(*(uint32_t*)&sum03);
+      //dump_try(*(uint32_t*)&sum00);
+      //dump_try(*(uint32_t*)&sum01);
+      //dump_try(*(uint32_t*)&sum02);
+      //dump_try(*(uint32_t*)&sum03);
 
       v4b res0, res1;
-      asm volatile("vfcpka.b.s %[res0], %[sum03], %[sum02];"
-                   "vfcpkb.b.s %[res0], %[sum01], %[sum00];"
-                   "vfcpka.b.s %[res1], %[sum13], %[sum12];"
-                   "vfcpkb.b.s %[res1], %[sum11], %[sum10];"
+      asm volatile("vfcpka.b.s %[res0], %[sum00], %[sum01];"
+                   "vfcpkb.b.s %[res0], %[sum02], %[sum03];"
+                   "vfcpka.b.s %[res1], %[sum10], %[sum11];"
+                   "vfcpkb.b.s %[res1], %[sum12], %[sum13];"
                    : [res0] "=&r"(res0), [res1] "=&r"(res1)
                    : [sum00] "r"(sum00), [sum01] "r"(sum01), [sum02] "r"(sum02), [sum03] "r"(sum03),
                      [sum10] "r"(sum10), [sum11] "r"(sum11), [sum12] "r"(sum12), [sum13] "r"(sum13));
       
-      dump_try(*(uint32_t*)&res0);
+      //dump_try(*(uint32_t*)&res0);
 
       (*(v4b *)&C[i * P + k]) = res0;
       (*(v4b *)&C[(i + 1) * P + k]) = res1;
