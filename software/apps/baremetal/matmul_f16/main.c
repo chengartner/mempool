@@ -24,6 +24,7 @@ Parameters and defines
 SINGLE: When defined runs single-core matmul.
 PARALLEL: When defined runs parallel matmul.
 */
+#define PARALLEL
 
 __fp16 matrix_a[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
