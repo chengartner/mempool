@@ -22,9 +22,10 @@ dump(try, 8);
 ======================
 Parameters and defines
 
-SINGLE: When defined runs single-core matmul.
-PARALLEL: When defined runs parallel matmul.
+INNER: When defined runs inner product based matmul.
+OUTER: When defined runs outer product based matmul.
 */
+#define INNER
 
 __fp8 matrix_a[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
@@ -49,22 +50,23 @@ int main() {
   }
   mempool_barrier(num_cores);
 
-  
+#if defined(INNER)
   // Matmul based on inner product (between rows of A and cols of B)
   mempool_start_benchmark();
   matmul_4x4_parallel_inner_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
                              matrix_P, core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
-  
-  /*
+#endif
+
+#if defined(OUTER)
   // Matmul based on outer product (between cols of A and rows of B)
   mempool_start_benchmark();
-  matmul_2x4_parallel_outer_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
+  matmul_4x4_parallel_outer_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
                              matrix_P, core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
-  */
+#endif  
 
   // For small matrices, replace 150 with matrix_M * matrix_P (dimension of matrix C)
   mempool_check_f8(matrix_c, l2_C, 50, 0.1f, 1);
