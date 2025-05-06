@@ -11,6 +11,7 @@
 #include "encoding.h"
 #include "runtime.h"
 #include "synchronization.h"
+#include "builtins_v2.h"
 
 #include "data_matmul_f16.h"
 
