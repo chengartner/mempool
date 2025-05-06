@@ -13,6 +13,8 @@
 
 #include "data_matmul_f8.h"
 
+dump(try, 8);
+
 #include "baremetal/mempool_checks.h"
 #include "baremetal/mempool_matmul_f8.h"
 
@@ -34,6 +36,7 @@ __fp8 matrix_c[matrix_M * matrix_P]
 int main() {
   uint32_t core_id = mempool_get_core_id();
   uint32_t num_cores = mempool_get_core_count();
+  //uint32_t num_cores = 64;
   // Initialize barrier and synchronize
   mempool_barrier_init(core_id);
 
@@ -46,27 +49,25 @@ int main() {
   }
   mempool_barrier(num_cores);
 
-#if defined(SINGLE)
-  if (core_id == 0) {
-    // Execute function to test
-    mempool_start_benchmark();
-    matmul_2x2_single_f8(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
-                          matrix_P); //TODO
-    mempool_stop_benchmark();
-  }
-  mempool_barrier(num_cores);
-#endif
-
-#if defined(PARALLEL)
-  // Execute function to test
+  
+  // Matmul based on inner product (between rows of A and cols of B)
   mempool_start_benchmark();
-  matmul_4x2_parallel_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
+  matmul_4x4_parallel_inner_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
                              matrix_P, core_id, num_cores);
-  mempool_barrier(num_cores); //TODO
+  mempool_barrier(num_cores);
   mempool_stop_benchmark();
-#endif
+  
+  /*
+  // Matmul based on outer product (between cols of A and rows of B)
+  mempool_start_benchmark();
+  matmul_2x4_parallel_outer_f8vec(matrix_a, matrix_b, matrix_c, matrix_M, matrix_N,
+                             matrix_P, core_id, num_cores);
+  mempool_barrier(num_cores);
+  mempool_stop_benchmark();
+  */
 
-  mempool_check_f8(matrix_c, l2_C, matrix_M * matrix_P, 0.5f, 0); //TODO
+  // For small matrices, replace 150 with matrix_M * matrix_P (dimension of matrix C)
+  mempool_check_f8(matrix_c, l2_C, 50, 0.1f, 1);
   mempool_barrier(num_cores);
   return 0;
 }
