@@ -231,9 +231,9 @@
   "matmul_f8": {
     "type": "float8_e5m2",
     "defines": [
-      ("matrix_M", 32)
-      ("matrix_N", 32)
-      ("matrix_P", 32)
+      ("matrix_M", 64)
+      ("matrix_N", 256)
+      ("matrix_P", 1024)
     ]
     "arrays": [
       ("__fp8", "l2_A")
