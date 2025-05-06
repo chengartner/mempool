@@ -63,14 +63,14 @@ void matmul_2x4_parallel_outer_f8vec(const __fp8 *__restrict__ A,
               [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
 
         asm volatile(
-            "vfmac.b %[sum0], %[aVec00], %[bVec0], %[sum0];"   // res0 += a00*b00 a00*b01 a00*b02 a00*b03
-            "vfmac.b %[sum1], %[aVec01], %[bVec1], %[sum1];"   // res1 += a01*b00 a01*b01 a01*b02 a01*b03
-            "vfmac.b %[sum2], %[aVec02], %[bVec2], %[sum2];"   // res2 += a02*b00 a02*b01 a02*b02 a02*b03
-            "vfmac.b %[sum3], %[aVec03], %[bVec3], %[sum3];"   // res3 += a03*b00 a03*b01 a03*b02 a03*b03
-            "vfmac.b %[sum0], %[aVec10], %[bVec0], %[sum0];"   // res0 += a10*b10 a10*b11 a10*b12 a10*b13
-            "vfmac.b %[sum1], %[aVec11], %[bVec1], %[sum1];"   // res1 += a11*b10 a11*b11 a11*b12 a11*b13
-            "vfmac.b %[sum2], %[aVec12], %[bVec2], %[sum2];"   // res2 += a12*b10 a12*b11 a12*b12 a12*b13
-            "vfmac.b %[sum3], %[aVec13], %[bVec3], %[sum3];"   // res3 += a13*b10 a13*b11 a13*b12 a13*b13
+            "vfmac.b %[sum0], %[aVec00], %[bVec0];"   // res0 += a00*b00 a00*b01 a00*b02 a00*b03
+            "vfmac.b %[sum1], %[aVec01], %[bVec1];"   // res1 += a01*b00 a01*b01 a01*b02 a01*b03
+            "vfmac.b %[sum2], %[aVec02], %[bVec2];"   // res2 += a02*b00 a02*b01 a02*b02 a02*b03
+            "vfmac.b %[sum3], %[aVec03], %[bVec3];"   // res3 += a03*b00 a03*b01 a03*b02 a03*b03
+            "vfmac.b %[sum0], %[aVec10], %[bVec0];"   // res0 += a10*b10 a10*b11 a10*b12 a10*b13
+            "vfmac.b %[sum1], %[aVec11], %[bVec1];"   // res1 += a11*b10 a11*b11 a11*b12 a11*b13
+            "vfmac.b %[sum2], %[aVec12], %[bVec2];"   // res2 += a12*b10 a12*b11 a12*b12 a12*b13
+            "vfmac.b %[sum3], %[aVec13], %[bVec3];"   // res3 += a13*b10 a13*b11 a13*b12 a13*b13
             : [sum0] "+&r"(sum0), [sum1] "+&r"(sum1), [sum2] "+&r"(sum2), [sum3] "+&r"(sum3)
             : [aVec00] "r"(aVec00), [aVec01] "r"(aVec01), [aVec02] "r"(aVec02), [aVec03] "r"(aVec03),
               [aVec10] "r"(aVec10), [aVec11] "r"(aVec11), [aVec12] "r"(aVec12), [aVec13] "r"(aVec13),
@@ -82,24 +82,11 @@ void matmul_2x4_parallel_outer_f8vec(const __fp8 *__restrict__ A,
       //dump_try(*(uint32_t*)&sum02);
       //dump_try(*(uint32_t*)&sum03);
 
-      
-      v4b res0, res1, res2, res3;
-      asm volatile("vfcpka.b.s %[res0], %[sum0], %[sum0];"
-                   "vfcpkb.b.s %[res0], %[sum0], %[sum0];"
-                   "vfcpka.b.s %[res1], %[sum1], %[sum1];"
-                   "vfcpkb.b.s %[res1], %[sum1], %[sum1];"
-                   "vfcpka.b.s %[res2], %[sum2], %[sum2];"
-                   "vfcpkb.b.s %[res2], %[sum2], %[sum2];"
-                   "vfcpka.b.s %[res3], %[sum3], %[sum3];"
-                   "vfcpkb.b.s %[res3], %[sum3], %[sum3];"
-                   : [res0] "=&r"(res0), [res1] "=&r"(res1), [res2] "=&r"(res2), [res3] "=&r"(res3)
-                   : [sum0] "r"(sum0), [sum1] "r"(sum1), [sum2] "r"(sum2), [sum3] "r"(sum3));
-      
 
-      (*(v4b *)&C[i * P + k]) = res0;
-      (*(v4b *)&C[(i + 1) * P + k]) = res1;
-      (*(v4b *)&C[(i + 2) * P + k]) = res2;
-      (*(v4b *)&C[(i + 3) * P + k]) = res3;
+      (*(v4b *)&C[i * P + k]) = sum0;
+      (*(v4b *)&C[(i + 1) * P + k]) = sum1;
+      (*(v4b *)&C[(i + 2) * P + k]) = sum2;
+      (*(v4b *)&C[(i + 3) * P + k]) = sum3;
     }
   }
 }
@@ -129,37 +116,67 @@ void matmul_2x4_parallel_inner_f8vec(const __fp8 *__restrict__ A,
       float volatile sum13 = 0.0f;
       for (j = 0; j < N; j += 4) {
 
-        v4b aVec0 = *(v4b *)&(A[i * N + j]);            // aVec0 = [a03 a02 a01 a00]
-        v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);      // aVec1 = [a13 a12 a11 a10]
         v4b bVecTemp0 = *(v4b *)&(B[j * P + k]);        // bVecTemp0 = [b03 b02 b01 b00]
         v4b bVecTemp1 = *(v4b *)&(B[(j + 1) * P + k]);  // bVecTemp1 = [b13 b12 b11 b10]
         v4b bVecTemp2 = *(v4b *)&(B[(j + 2) * P + k]);  // bVecTemp2 = [b23 b22 b21 b20]
         v4b bVecTemp3 = *(v4b *)&(B[(j + 3) * P + k]);  // bVecTemp3 = [b33 b32 b31 b30]
+        v4b aVec0 = *(v4b *)&(A[i * N + j]);            // aVec0 = [a03 a02 a01 a00]
+        v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);      // aVec1 = [a13 a12 a11 a10]
         v4b bVec0, bVec1, bVec2, bVec3, bVecLow0, bVecLow1, bVecLow2, bVecLow3;
         unsigned ShuffleMask1 = 0x05070406; // [a b c d] => [c a d b]
         unsigned ShuffleMask2 = 0x05040706; // [a b c d] => [c d a b]
+        
         asm volatile(
             "pv.pack.h %[bVec2], %[bVecTemp0], %[bVecTemp1];"    // bVec2 = [b03 b02 b13 b12]
-            "pv.shuffle2.b %[bVec2], %[bVec2], %[ShuffleMask1];" // bVec2 = [b13 b03 b12 b02]
-            "pv.extract.h %[bVec3], %[bVec2], 1;"                // bVec3 = [0 0 b13 b03]
-            "pv.extract.h %[bVec2], %[bVec2], 0;"                // bVec2 = [0 0 b12 b02]
+            "pv.pack.h %[bVecLow2], %[bVecTemp2], %[bVecTemp3];" // bVecLow2 = [b23 b22 b33 b32]
+
             "pv.shuffle2.b %[bVecTemp0], %[bVecTemp0], %[ShuffleMask2];" // bVecTemp0 = [b01 b00 b03 b02]
             "pv.shuffle2.b %[bVecTemp1], %[bVecTemp1], %[ShuffleMask2];" // bVecTemp1 = [b11 b10 b13 b12]
-            "pv.pack.h %[bVec0], %[bVecTemp0], %[bVecTemp1];"    // bVec0 = [b01 b00 b11 b10]
-            "pv.shuffle2.b %[bVec0], %[bVec0], %[ShuffleMask1];" // bVec0 = [b11 b01 b10 b00]
-            "pv.extract.h %[bVec1], %[bVec0], 1;"                // bVec1 = [0 0 b11 b01]
-            "pv.extract.h %[bVec0], %[bVec0], 0;"                // bVec0 = [0 0 b10 b00]
-
-            "pv.pack.h %[bVecLow2], %[bVecTemp2], %[bVecTemp3];"       // bVecLow2 = [b23 b22 b33 b32]
-            "pv.shuffle2.b %[bVecLow2], %[bVecLow2], %[ShuffleMask1];" // bVecLow2 = [b33 b23 b32 b22]
-            "pv.extract.h %[bVecLow3], %[bVecLow2], 1;"                // bVecLow3 = [0 0 b33 b23]
-            "pv.extract.h %[bVecLow2], %[bVecLow2], 0;"                // bVecLow2 = [0 0 b32 b22]
             "pv.shuffle2.b %[bVecTemp2], %[bVecTemp2], %[ShuffleMask2];" // bVecTemp0 = [b21 b20 b23 b22]
             "pv.shuffle2.b %[bVecTemp3], %[bVecTemp3], %[ShuffleMask2];" // bVecTemp1 = [b31 b30 b33 b32]
-            "pv.pack.h %[bVecLow0], %[bVecTemp2], %[bVecTemp3];"       // bVecLow0 = [b21 b20 b31 b30]
+
+            "pv.shuffle2.b %[bVec2], %[bVec2], %[ShuffleMask1];"       // bVec2 = [b13 b03 b12 b02]
+            "pv.shuffle2.b %[bVecLow2], %[bVecLow2], %[ShuffleMask1];" // bVecLow2 = [b33 b23 b32 b22]
+
+            "pv.pack.h %[bVec0], %[bVecTemp0], %[bVecTemp1];"    // bVec0 = [b01 b00 b11 b10]
+            "pv.pack.h %[bVecLow0], %[bVecTemp2], %[bVecTemp3];" // bVecLow0 = [b21 b20 b31 b30]
+
+            "pv.extract.h %[bVec3], %[bVec2], 1;"         // bVec3 = [0 0 b13 b03]
+            "pv.extract.h %[bVec2], %[bVec2], 0;"         // bVec2 = [0 0 b12 b02]
+            
+            "pv.shuffle2.b %[bVec0], %[bVec0], %[ShuffleMask1];"       // bVec0 = [b11 b01 b10 b00]
             "pv.shuffle2.b %[bVecLow0], %[bVecLow0], %[ShuffleMask1];" // bVecLow0 = [b31 b21 b30 b20]
-            "pv.extract.h %[bVecLow1], %[bVecLow0], 1;"                // bVecLow1 = [0 0 b31 b21]
-            "pv.extract.h %[bVecLow0], %[bVecLow0], 0;"                // bVecLow0 = [0 0 b30 b20]
+
+            "pv.extract.h %[bVecLow3], %[bVecLow2], 1;"   // bVecLow3 = [0 0 b33 b23]
+            "pv.extract.h %[bVecLow2], %[bVecLow2], 0;"   // bVecLow2 = [0 0 b32 b22]
+
+            "pv.extract.h %[bVec1], %[bVec0], 1;"          // bVec1 = [0 0 b11 b01]
+            "pv.extract.h %[bVec0], %[bVec0], 0;"          // bVec0 = [0 0 b10 b00]
+            "pv.extract.h %[bVecLow1], %[bVecLow0], 1;"    // bVecLow1 = [0 0 b31 b21]
+            "pv.extract.h %[bVecLow0], %[bVecLow0], 0;"    // bVecLow0 = [0 0 b30 b20]
+
+
+            //"pv.pack.h %[bVec2], %[bVecTemp0], %[bVecTemp1];"    // bVec2 = [b03 b02 b13 b12]
+            //"pv.shuffle2.b %[bVec2], %[bVec2], %[ShuffleMask1];" // bVec2 = [b13 b03 b12 b02]
+            //"pv.extract.h %[bVec3], %[bVec2], 1;"                // bVec3 = [0 0 b13 b03]
+            //"pv.extract.h %[bVec2], %[bVec2], 0;"                // bVec2 = [0 0 b12 b02]
+            //"pv.shuffle2.b %[bVecTemp0], %[bVecTemp0], %[ShuffleMask2];" // bVecTemp0 = [b01 b00 b03 b02]
+            //"pv.shuffle2.b %[bVecTemp1], %[bVecTemp1], %[ShuffleMask2];" // bVecTemp1 = [b11 b10 b13 b12]
+            //"pv.pack.h %[bVec0], %[bVecTemp0], %[bVecTemp1];"    // bVec0 = [b01 b00 b11 b10]
+            //"pv.shuffle2.b %[bVec0], %[bVec0], %[ShuffleMask1];" // bVec0 = [b11 b01 b10 b00]
+            //"pv.extract.h %[bVec1], %[bVec0], 1;"                // bVec1 = [0 0 b11 b01]
+            //"pv.extract.h %[bVec0], %[bVec0], 0;"                // bVec0 = [0 0 b10 b00]
+
+            //"pv.pack.h %[bVecLow2], %[bVecTemp2], %[bVecTemp3];"       // bVecLow2 = [b23 b22 b33 b32]
+            //"pv.shuffle2.b %[bVecLow2], %[bVecLow2], %[ShuffleMask1];" // bVecLow2 = [b33 b23 b32 b22]
+            //"pv.extract.h %[bVecLow3], %[bVecLow2], 1;"                // bVecLow3 = [0 0 b33 b23]
+            //"pv.extract.h %[bVecLow2], %[bVecLow2], 0;"                // bVecLow2 = [0 0 b32 b22]
+            //"pv.shuffle2.b %[bVecTemp2], %[bVecTemp2], %[ShuffleMask2];" // bVecTemp0 = [b21 b20 b23 b22]
+            //"pv.shuffle2.b %[bVecTemp3], %[bVecTemp3], %[ShuffleMask2];" // bVecTemp1 = [b31 b30 b33 b32]
+            //"pv.pack.h %[bVecLow0], %[bVecTemp2], %[bVecTemp3];"       // bVecLow0 = [b21 b20 b31 b30]
+            //"pv.shuffle2.b %[bVecLow0], %[bVecLow0], %[ShuffleMask1];" // bVecLow0 = [b31 b21 b30 b20]
+            //"pv.extract.h %[bVecLow1], %[bVecLow0], 1;"                // bVecLow1 = [0 0 b31 b21]
+            //"pv.extract.h %[bVecLow0], %[bVecLow0], 0;"                // bVecLow0 = [0 0 b30 b20]
 
             "pv.shuffle2.b %[bVec3], %[bVec3], %[ShuffleMask2];" // bVec3 = [b13 b03 0 0]
             "pv.shuffle2.b %[bVec2], %[bVec2], %[ShuffleMask2];" // bVec2 = [b12 b02 0 0]
