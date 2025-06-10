@@ -185,6 +185,7 @@ if __name__ == '__main__':
         "dotp_f16": {"func": datalib.generate_fdotp},
         "dotp_f32": {"func": datalib.generate_fdotp},
         "dotp_i32": {"func": datalib.generate_idotp},
+        "fcvt_f32f8": {"func": datalib.generate_fcvt},
         "matmul_f8": {"func": datalib.generate_fmatmul},
         "matmul_f16": {"func": datalib.generate_fmatmul},
         "matmul_f32": {"func": datalib.generate_fmatmul},
@@ -195,9 +196,12 @@ if __name__ == '__main__':
         "mimo_mmse_f16": {"func": datalib.generate_fmmse},
         "mimo_mmse_f32": {"func": datalib.generate_fmmse},
         "mimo_mmse_f8": {"func": datalib.generate_fmmse},
+        "norm_f8": {"func": datalib.generate_fnorm},
         "ofdm_f16": {"func": datalib.generate_fofdm},
         "fence": {"func": datalib.generate_iarray},
         "memcpy": {"func": datalib.generate_iarray},
+        "softmax_f8": {"func": datalib.generate_fsoftmax},
+        "vit_f8": {"func": datalib.generate_fvit},
     }
 
     # Check if app_name exists in the function map

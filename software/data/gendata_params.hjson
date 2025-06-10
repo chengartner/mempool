@@ -228,6 +228,20 @@
     ]
   },
 
+  "fcvt_f32f8": {
+    "type": "float8_e5m2",
+    "defines": [
+      ("matrix_M", 16)
+      ("matrix_N", 16)
+    ]
+    "arrays": [
+      ("__fp8", "l2_AIn")
+      ("float", "l2_AOut")
+      ("float", "l2_BIn")
+      ("__fp8", "l2_BOut")
+    ]
+  },
+
   "matmul_f8": {
     "type": "float8_e5m2",
     "defines": [
@@ -245,9 +259,9 @@
   "matmul_f16": {
     "type": "float16",
     "defines": [
-      ("matrix_M", 32)
-      ("matrix_N", 32)
-      ("matrix_P", 32)
+      ("matrix_M", 64)
+      ("matrix_N", 256)
+      ("matrix_P", 4096)
     ]
     "arrays": [
       ("__fp16", "l2_A")
@@ -377,6 +391,18 @@
     ]
   }
 
+  "norm_f8": {
+    "type": "float8_e5m2",
+    "defines": [
+      ("matrix_M", 8)
+      ("matrix_N", 8)
+    ]
+    "arrays": [
+      ("__fp8", "l2_A")
+      ("__fp8", "l2_B")
+    ]
+  },
+
   "ofdm_f16": {
     "type": "float16",
     "defines": [
@@ -410,6 +436,41 @@
     ]
     "arrays": [
       ("int32_t", "l2_data")
+    ]
+  },
+
+  "softmax_f8": {
+    "type": "float8_e5m2",
+    "defines": [
+      ("matrix_M", 16)
+      ("matrix_N", 16)
+    ]
+    "arrays": [
+      ("__fp8", "l2_A")
+      ("__fp8", "l2_B")
+    ]
+  },
+
+  "vit_f8": {
+    "type": "float8_e5m2",
+    "defines": [
+      ("dim_s", 196)
+      ("dim_e", 256)
+      ("dim_h", 64)
+      ("dim_i", 1024)
+    ]
+    "arrays": [
+      ("__fp8", "l2_Image")
+      ("__fp8", "l2_Wk")
+      ("__fp8", "l2_Wq")
+      ("__fp8", "l2_Wv")
+      ("__fp8", "l2_K")
+      ("__fp8", "l2_Q")
+      ("__fp8", "l2_V")
+      ("__fp8", "l2_A")
+      ("__fp8", "l2_UpScale")
+      ("__fp8", "l2_DownScale")
+      ("__fp8", "l2_Result")
     ]
   },
 

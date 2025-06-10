@@ -93,6 +93,29 @@ def generate_faxpy(my_type=np.float32, defines={}):
 
     return [A, X, Y, Z], defines
 
+def generate_fcvt(my_type=np.float32, defines={}):
+
+    # Define dimension
+    matrix_M = defines['matrix_M']
+    matrix_N = defines['matrix_N']
+
+    # Create matrix
+    AOut = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float32)
+    # Cast the correct type
+    AIn = ff.array(AOut, 'e5m2')
+
+    BIn = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float32)
+    # Cast the correct type
+    BOut = ff.array(BIn, 'e5m2')
+
+    # Flatten the matrices into 1D arrays
+    AIn = np.reshape(AIn, (matrix_M * matrix_N), order='C')
+    AOut = np.reshape(AOut, (matrix_M * matrix_N), order='C')
+    BIn = np.reshape(BIn, (matrix_M * matrix_N), order='C')
+    BOut = np.reshape(BOut, (matrix_M * matrix_N), order='C')
+
+    return [AIn, AOut, BIn, BOut], defines
+
 
 def generate_fdotp(my_type=np.float32, defines={}):
 
@@ -652,3 +675,135 @@ def generate_cfft_q16(defines={}, fixed_point=15, my_type=np.int16):
     defines['TOLERANCE'] = tolerance[N_CSAMPLES]
 
     return [src, dst, twiddles, bitrever], defines
+
+def generate_fnorm(my_type=np.float32, defines={}):
+
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
+
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float16)
+        Sum = np.zeros(matrix_N,).astype(np.float16)
+        Squared_diff = np.zeros(matrix_N,).astype(np.float16)
+        # Cast the correct type
+        A = ff.array(A, 'e5m2')
+        Sum = ff.array(Sum, 'e5m2')
+        Squared_diff = ff.array(Squared_diff, 'e5m2')
+
+        # Normalize matrix A (using BatchNorm)
+        for i in range(matrix_M):
+            Sum += A[i]
+        mean = Sum / matrix_M
+
+        for i in range(matrix_M):
+            diff = A[i] - mean
+            Squared_diff += diff * diff
+        var = Squared_diff / matrix_M
+
+        B = (A - mean) / np.sqrt(var)
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+        return [A, B], defines
+
+
+def generate_fsoftmax(my_type=np.float32, defines={}):
+
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
+
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float16)
+        # Cast the correct type
+        A = ff.array(A, 'e5m2')
+
+        # Normalize matrix A (using BatchNorm)
+        B = np.exp(A) / sum(np.exp(A))
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+        return [A, B], defines
+
+
+def generate_fvit(my_type=np.float32, defines={}):
+
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
+        
+        # Define dimension
+        dim_s = defines['dim_s']
+        dim_e = defines['dim_e']
+        dim_h = defines['dim_h']
+        dim_i = defines['dim_i']
+
+        # Create empty matrices to store result
+        K_init = np.zeros(dim_s, dim_h)
+        Q_init = np.zeros(dim_s, dim_h)
+        V_init = np.zeros(dim_s, dim_h)
+        A_init = np.zeros(dim_s, dim_s)
+
+        # Create input matrix
+        Image = (np.random.rand(dim_s, dim_e) - 0.5).astype(np.float16)
+        Wk = (np.random.rand(dim_e, dim_h) - 0.5).astype(np.float16)
+        Wq = (np.random.rand(dim_e, dim_h) - 0.5).astype(np.float16)
+        Wv = (np.random.rand(dim_e, dim_h) - 0.5).astype(np.float16)
+        UpScale = (np.random.rand(dim_e, dim_i) - 0.5).astype(np.float16)
+        DownScale = (np.random.rand(dim_i, dim_e) - 0.5).astype(np.float16)
+        
+        # Cast the correct type
+        Image = ff.array(Image, 'e5m2')
+        Wk = ff.array(Wk, 'e5m2')
+        Wq = ff.array(Wq, 'e5m2')
+        Wv = ff.array(Wv, 'e5m2')
+        UpScale = ff.array(UpScale, 'e5m2')
+        DownScale = ff.array(DownScale, 'e5m2')
+
+        # Generate QKV matrices
+        K = np.matmul(Image, Wk)
+        Q = np.matmul(Image, Wq)
+        V = np.matmul(Image, Wv)
+
+        # Create attention matrix
+        Kt = np.transpose(K)
+        A = np.matmul(Q, Kt)
+
+        # Softmax
+        S = np.exp(A) / sum(np.exp(A))
+
+        # Create output matrix
+        O = np.matmul(S, V)
+
+        # Normalize output matrix (using BatchNorm)
+        mean = np.mean(O, axis=0)
+        var = np.var(O, axis=0)
+        O_normalized = (O - mean) / np.sqrt(var)
+
+        # Upscale normalized output matrix
+        O_scaled = np.matmul(O_normalized, UpScale)
+
+        # Downscale scaled output matrix
+        Result = np.matmul(O_scaled, DownScale)
+
+        # Combine attention heads
+        # TODO
+
+        # Flatten the matrices into 1D arrays
+        Image = np.reshape(Image, (dim_s * dim_e), order='C')
+        Wk = np.reshape(Wk, (dim_e * dim_h), order='C')
+        Wq = np.reshape(Wq, (dim_e * dim_h), order='C')
+        Wv = np.reshape(Wv, (dim_e * dim_h), order='C')
+        UpScale = np.reshape(UpScale, (dim_e * dim_i), order='C')
+        DownScale = np.reshape(DownScale, (dim_i * dim_e), order='C')
+        Result = np.reshape(Result, (dim_s * dim_e), order='C')
+
+    return [Image, Wk, Wq, Wv, K_init, Q_init, V_init, A_init,
+                UpScale, DownScale, Result], defines
