@@ -71,7 +71,7 @@ zfinx ?= 1
 zquarterinx ?= 1
 
 # DivSqrt deactivated by default
-xDivSqrt ?= 0
+xDivSqrt ?= 1
 
 # This parameter is only used for TeraPool configurations
 num_sub_groups_per_group ?= 1
