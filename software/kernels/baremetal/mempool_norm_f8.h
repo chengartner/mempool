@@ -9,8 +9,8 @@
 #pragma once
 #include "builtins_v2.h"
 
-
-void normalize_2x4_parallel_f8vec(const __fp8 *__restrict__ A,
+/*
+void normalize_parallel_f8vec(const __fp8 *__restrict__ A,
                                 __fp8 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {
@@ -61,10 +61,10 @@ void normalize_2x4_parallel_f8vec(const __fp8 *__restrict__ A,
 
     
   }
-}
+}*/
 
-/*
-void normalize_2x4_parallel_f8vec(const __fp8 *__restrict__ A,
+
+void normalize_parallel_f8vec(const __fp8 *__restrict__ A,
                                 __fp8 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {
@@ -132,26 +132,32 @@ void normalize_2x4_parallel_f8vec(const __fp8 *__restrict__ A,
 
       v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
       v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
-      //v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
-      //v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
+      v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
+      v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
     	
-      v4b aNorm0, aNorm1;
+      v4b aNorm0, aNorm1, aNorm2, aNorm3;
 
       asm volatile(
     	// Compute: aVec0 - vMean
     	"vfsub.b %[aNorm0], %[aVec0], %[vMean];"
     	"vfsub.b %[aNorm1], %[aVec1], %[vMean];"
+      "vfsub.b %[aNorm2], %[aVec2], %[vMean];"
+      "vfsub.b %[aNorm3], %[aVec3], %[vMean];"
     	// Computee: aNorm0 / vStd
     	"vfdiv.b %[aNorm0], %[aNorm0], %[vStd];"
     	"vfdiv.b %[aNorm1], %[aNorm1], %[vStd];"
-        : [aNorm0] "+&r"(aNorm0), [aNorm1] "+&r"(aNorm1)
+      "vfdiv.b %[aNorm2], %[aNorm2], %[vStd];"
+      "vfdiv.b %[aNorm3], %[aNorm3], %[vStd];"
+        : [aNorm0] "+&r"(aNorm0), [aNorm1] "+&r"(aNorm1), 
+          [aNorm2] "+&r"(aNorm2), [aNorm3] "+&r"(aNorm3)
         : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1),
+          [aVec2] "r"(aVec2), [aVec3] "r"(aVec3),
           [vMean] "r"(vMean), [vStd] "r"(vStd));
       
       (*(v4b *)&B[i * N + j]) = aNorm0;
       (*(v4b *)&B[(i + 1) * N + j]) = aNorm1;
-      //(*(v4b *)&C[(i + 2) * N + j]) = aNorm2;
-      //(*(v4b *)&C[(i + 3) * N + j]) = aNorm3;
+      (*(v4b *)&B[(i + 2) * N + j]) = aNorm2;
+      (*(v4b *)&B[(i + 3) * N + j]) = aNorm3;
     }
   }
-}*/
+}

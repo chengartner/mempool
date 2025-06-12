@@ -33,14 +33,12 @@ int main() {
   if (core_id == 0) {
     dma_memcpy_blocking(matrix_a, l2_A,
                         (matrix_M * matrix_N) * sizeof(int8_t));
-    dma_memcpy_blocking(matrix_b, l2_B,
-                        (matrix_M * matrix_N) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
   // Matrix Normalization
   mempool_start_benchmark();
-  normalize_2x4_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  normalize_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
