@@ -90,9 +90,7 @@ void normalize_parallel_f8vec(const __fp8 *__restrict__ A,
 
       v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
       v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
-      //v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
-      //v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
-
+      
       v4b aVecSq0, aVecSq1;
 
       asm volatile(
@@ -128,7 +126,7 @@ void normalize_parallel_f8vec(const __fp8 *__restrict__ A,
       : [vSum] "r"(vSum), [vSumSq] "r"(vSumSq));
 
 
-    for (i = 0; i < M; i += 2) {
+    for (i = 0; i < M; i += 4) {
 
       v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
       v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
