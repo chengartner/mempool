@@ -208,26 +208,27 @@ void matmul_4x2_parallel_f16vec(const __fp16 *__restrict__ pSrcA,
         v2h bVecTemp0 = *(v2h *)&(pSrcB[j * P + k]);
         v2h bVecTemp1 = *(v2h *)&(pSrcB[(j + 1) * P + k]);
         v2h bVec0, bVec1;
-        unsigned TempH, TempL;
+        unsigned TempH0, TempL0, TempH1, TempL1;
         asm volatile(
-            "pv.extract.h %[TempH], %[bVecTemp0], 1;"
-            "pv.extract.h %[TempL], %[bVecTemp1], 1;"
-            "pv.pack %[bVec0], %[TempL], %[TempH];"
-            "pv.extract.h %[TempH], %[bVecTemp0], 0;"
-            "pv.extract.h %[TempL], %[bVecTemp1], 0;"
-            "pv.pack %[bVec1], %[TempL], %[TempH];"
+            "pv.extract.h %[TempH0], %[bVecTemp0], 1;"
+            "pv.extract.h %[TempL0], %[bVecTemp1], 1;"
+            "pv.extract.h %[TempH1], %[bVecTemp0], 0;"
+            "pv.extract.h %[TempL1], %[bVecTemp1], 0;"
+            "pv.pack %[bVec0], %[TempL0], %[TempH0];"
+            "pv.pack %[bVec1], %[TempL1], %[TempH1];"
             "vfdotpex.s.h %[sum00], %[aVec0], %[bVec0];"
-            "vfdotpex.s.h %[sum01], %[aVec0], %[bVec1];"
             "vfdotpex.s.h %[sum10], %[aVec1], %[bVec0];"
-            "vfdotpex.s.h %[sum11], %[aVec1], %[bVec1];"
             "vfdotpex.s.h %[sum20], %[aVec2], %[bVec0];"
-            "vfdotpex.s.h %[sum21], %[aVec2], %[bVec1];"
             "vfdotpex.s.h %[sum30], %[aVec3], %[bVec0];"
+            "vfdotpex.s.h %[sum01], %[aVec0], %[bVec1];"
+            "vfdotpex.s.h %[sum11], %[aVec1], %[bVec1];"
+            "vfdotpex.s.h %[sum21], %[aVec2], %[bVec1];"
             "vfdotpex.s.h %[sum31], %[aVec3], %[bVec1];"
             : [sum00] "+&r"(sum00), [sum01] "+&r"(sum01), [sum10] "+&r"(sum10),
               [sum11] "+&r"(sum11), [sum20] "+&r"(sum20), [sum21] "+&r"(sum21),
               [sum30] "+&r"(sum30), [sum31] "+&r"(sum31), [bVec0] "=&r"(bVec0),
-              [bVec1] "+&r"(bVec1), [TempH] "+&r"(TempH), [TempL] "+&r"(TempL)
+              [bVec1] "+&r"(bVec1), [TempH0] "+&r"(TempH0), [TempL0] "+&r"(TempL0),
+              [TempH1] "+&r"(TempH1), [TempL1] "+&r"(TempL1)
             : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2),
               [aVec3] "r"(aVec3), [bVecTemp0] "r"(bVecTemp0),
               [bVecTemp1] "r"(bVecTemp1)

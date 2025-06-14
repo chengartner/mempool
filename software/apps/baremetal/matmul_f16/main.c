@@ -24,6 +24,7 @@ Parameters and defines
 SINGLE: When defined runs single-core matmul.
 PARALLEL: When defined runs parallel matmul.
 */
+#define PARALLEL
 
 __fp16 matrix_a[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
@@ -67,7 +68,7 @@ int main() {
   mempool_stop_benchmark();
 #endif
 
-  mempool_check_f16(matrix_c, l2_C, matrix_M * matrix_P, 0.5f, 0);
+  mempool_check_f16(matrix_c, l2_C, matrix_M * matrix_P, 0.1f, 0);
   mempool_barrier(num_cores);
   return 0;
 }
