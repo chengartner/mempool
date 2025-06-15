@@ -42,7 +42,7 @@ int main() {
   // PARALLEL, LOCAL ACCESSES
   time_init = mempool_get_timer();
   mempool_start_benchmark();
-  axpy_f8vecp_local_unrolled4(a, l1_X, l1_Y, array_N);
+  axpy_f8vec_local_unrolled4(a, l1_X, l1_Y, array_N);
   mempool_stop_benchmark();
   time_end = mempool_get_timer();
 
@@ -53,7 +53,7 @@ int main() {
     uint32_t clock_cycles = (time_end - time_init);
     printf("\nKernel execution takes %d clock cycles\n", clock_cycles);
   }
-  mempool_check_f8(l1_Y, l2_Z, 100, 0.1f, 1);
+  mempool_check_f8(l1_Y, l2_Z, array_N, 0x34, 0); // tol = 0.25 = 0x34 (__fp8)
   mempool_barrier(num_cores);
 
   return 0;

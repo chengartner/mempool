@@ -47,7 +47,7 @@
 
 /* Parallel dot-product with loop unrolling */
 /* Load and stores only in local memory */
-void axpy_f8vecp_local_unrolled4(uint32_t a, __fp8 *in_x, __fp8 *in_y, 
+void axpy_f8vec_local_unrolled4(uint32_t a, __fp8 *in_x, __fp8 *in_y, 
 								 uint32_t Len) {
 
   uint32_t core_id = mempool_get_core_id();
@@ -72,7 +72,7 @@ void axpy_f8vecp_local_unrolled4(uint32_t a, __fp8 *in_x, __fp8 *in_y,
 
 /* Parallel dot-product with loop unrolling */
 /* Load and stores only in local memory */
-void axpy_f8vecp_local_unrolled2(uint32_t a, __fp8 *in_x, __fp8 *in_y, 
+void axpy_f8vec_local_unrolled2(uint32_t a, __fp8 *in_x, __fp8 *in_y, 
 								 uint32_t Len) {
 
   uint32_t core_id = mempool_get_core_id();
