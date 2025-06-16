@@ -678,6 +678,7 @@ def generate_cfft_q16(defines={}, fixed_point=15, my_type=np.int16):
 
 def generate_fnorm(my_type=np.float32, defines={}):
 
+    # f8: Cast correct type
     if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
 
         # Define dimension
@@ -709,7 +710,34 @@ def generate_fnorm(my_type=np.float32, defines={}):
         A = np.reshape(A, (matrix_M * matrix_N), order='C')
         B = np.reshape(B, (matrix_M * matrix_N), order='C')
 
-        return [A, B], defines
+    # f16,f32: Use normal operation (FP type automatically retained)
+    else:
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(my_type)
+        Sum = np.zeros(matrix_N,).astype(my_type)
+        Squared_diff = np.zeros(matrix_N,).astype(my_type)
+
+        # Normalize matrix A (using BatchNorm)
+        for i in range(matrix_M):
+            Sum += A[i]
+        mean = Sum / matrix_M
+
+        for i in range(matrix_M):
+            diff = A[i] - mean
+            Squared_diff += diff * diff
+        var = Squared_diff / matrix_M
+
+        B = (A - mean) / np.sqrt(var)
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+    return [A, B], defines
 
 
 def generate_fsoftmax(my_type=np.float32, defines={}):
@@ -732,7 +760,7 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
         A = np.reshape(A, (matrix_M * matrix_N), order='C')
         B = np.reshape(B, (matrix_M * matrix_N), order='C')
 
-        return [A, B], defines
+    return [A, B], defines
 
 
 def generate_fvit(my_type=np.float32, defines={}):
