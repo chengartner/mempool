@@ -11,16 +11,16 @@
 #include "synchronization.h"
 #include "builtins_v2.h"
 
-#include "data_softmax_f8.h"
+#include "data_softmax_f16.h"
 
 dump(try, 8);
 
 #include "baremetal/mempool_checks.h"
-#include "baremetal/mempool_softmax_f8.h"
+#include "baremetal/mempool_softmax_f16.h"
 
-__fp8 matrix_a[matrix_M * matrix_N]
+__fp16 matrix_a[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
-__fp8 matrix_b[matrix_M * matrix_N]
+__fp16 matrix_b[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
 
 int main() {
@@ -32,20 +32,20 @@ int main() {
   // Initialize matrices
   if (core_id == 0) {
     dma_memcpy_blocking(matrix_a, l2_A,
-                        (matrix_M * matrix_N) * sizeof(int8_t));
+                        (matrix_M * matrix_N) * sizeof(int16_t));
     dma_memcpy_blocking(matrix_b, l2_B,
-                        (matrix_M * matrix_N) * sizeof(int8_t));
+                        (matrix_M * matrix_N) * sizeof(int16_t));
   }
   mempool_barrier(num_cores);
 
   // Matrix Normalization
   mempool_start_benchmark();
-  softmax_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  softmax_parallel_f16vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
 
-  mempool_check_f8(matrix_b, l2_B, matrix_M * matrix_N, 0x34, 1); // tol = 0.25 = 0x34 (__fp8)
+  mempool_check_f16(matrix_b, l2_B, matrix_M * matrix_N, 0.1f, 0); // tol = 0.25 = 0x34 (__fp8)
   mempool_barrier(num_cores);
   return 0;
 }

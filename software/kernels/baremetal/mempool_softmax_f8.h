@@ -9,7 +9,7 @@
 #pragma once
 #include "builtins_v2.h"
 
-void softmax_4x4_parallel_f8vec(const __fp8 *__restrict__ A,
+void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
                                 __fp8 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {
@@ -22,117 +22,197 @@ void softmax_4x4_parallel_f8vec(const __fp8 *__restrict__ A,
   const unsigned ShuffleMask2 = 0x06060606; // [a b c d] => [b b b b]
   const unsigned ShuffleMask3 = 0x07070707; // [a b c d] => [a a a a]
 
-  v4b max;
+  float Half = 0.5f;
+  float One = 1.0f;
+  float init = 0.5f;
+  v4b vHalf, vOne, max_init;
 
-  for (i = core_id * 4; i < N; i += numThreads * 4) {
-    for (j = 0; j < M; j += 4) {
+  asm volatile(
+    "vfcpka.b.s %[vHalf], %[Half], %[Half];"
+    "vfcpka.b.s %[vOne], %[One], %[One];"
+    "vfcpka.b.s %[max_init], %[init], %[init];"
+    "vfcpkb.b.s %[vHalf], %[Half], %[Half];"
+    "vfcpkb.b.s %[vOne], %[One], %[One];"
+    "vfcpkb.b.s %[max_init], %[init], %[init];"
+    : [vHalf] "+&r"(vHalf), [vOne] "+&r"(vOne), [max_init] "+&r"(max_init)
+    : [Half] "r"(Half), [One] "r"(One), [init] "r"(init));
 
-      v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
-      v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
-      v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
-      v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
+  for (i = core_id * 2; i < M; i += numThreads * 2) {
+    
+  // 1) Find the row-wise maximum value
+    v4b max0 = max_init;
+    v4b max1 = max_init;
 
-      v4b max01, max23, vmax;
-      v4b pmax0, pmax1, pmax2, pmax3; // Potential max elements
+    for (j = 0; j < N; j += 8) {
+
+      v4b aVec00 = *(v4b *)&(A[i * N + j]);         // aVec00 = [a03 a02 a01 a00]
+      v4b aVec01 = *(v4b *)&(A[i * N + j+4]);       // aVec01 = [a07 a06 a05 a04]
+      v4b aVec10 = *(v4b *)&(A[(i + 1) * N + j]);   // aVec10 = [a13 a12 a11 a10]
+      v4b aVec11 = *(v4b *)&(A[(i + 1) * N + j+4]); // aVec11 = [a17 a16 a15 a14]
+
+      v4b temp0, temp1;
 
       asm volatile(
-        // Find max value
-        "vfmax.b %[max01], %[aVec0], %[aVec1];"
-        "vfmax.b %[max23], %[aVec2], %[aVec3];"
-        "vfmax.b %[vmax], %[max01], %[max23];"
-//        // Broadcast each element across vector lanes for full reduction
-//        "pv.shuffle2.b %[pmax0], %[vmax], %[ShuffleMask0];"
-//        "pv.shuffle2.b %[pmax1], %[vmax], %[ShuffleMask1];"
-//        "pv.shuffle2.b %[pmax2], %[vmax], %[ShuffleMask2];"
-//        "pv.shuffle2.b %[pmax3], %[vmax], %[ShuffleMask3];"
-//        "vfmax.b %[max01], %[pmax0], %[pmax1];"
-//        "vfmax.b %[max23], %[pmax2], %[pmax3];"
-//        "vfmax.b %[vmax], %[max01], %[max23];"
-//        "vfmac.b %[max], %[vmax], 1;"
-        : [max01] "+&r"(max01), [max23] "+&r"(max23), [vmax] "+&r"(vmax),
-          [pmax0] "+&r"(pmax0), [pmax1] "+&r"(pmax1), [pmax2] "+&r"(pmax2), 
-          [pmax3] "+&r"(pmax3), [max] "+&r"(max)
-        : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2), [aVec3] "r"(aVec3),
-          [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
-          [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
-        
+        // Find max value (no full reduction)
+        "vfmax.b %[temp0], %[aVec00], %[aVec01];"
+        "vfmax.b %[temp1], %[aVec10], %[aVec11];"
+        "vfmax.b %[max0], %[max0], %[temp0];"
+        "vfmax.b %[max1], %[max1], %[temp1];"
+        : [max0] "+&r"(max0), [max1] "+&r"(max1), [temp0] "+&r"(temp0), 
+          [temp1] "+&r"(temp1)
+        : [aVec00] "r"(aVec00), [aVec01] "r"(aVec01), [aVec10] "r"(aVec10), 
+          [aVec11] "r"(aVec11));
     }
-  }  
-  
-  for (j = core_id * 4; j < N; j += numThreads * 4) {
-    for (i = 0; i < M; i += 4) {
-      
-      v4b aVec0 = *(v4b *)&(A[i * N + j]);
-      v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);
-      v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);
-      v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);
-      v4b x0, x1, x2, x3; 
-      v4b xSq0, xSq1, xSq2, xSq3;
-      v4b exp0, exp1, exp2, exp3;
+    
+    // Potential max elements:
+    v4b pmax00, pmax01, pmax02, pmax03; 
+    v4b pmax10, pmax11, pmax12, pmax13; 
+    v4b temp00, temp01, temp10, temp11;
+    
+    asm volatile(
+      // Broadcast each element across vector lanes for full reduction
+      "pv.shuffle2.b %[pmax00], %[max0], %[ShuffleMask0];"
+      "pv.shuffle2.b %[pmax01], %[max0], %[ShuffleMask1];"
+      "pv.shuffle2.b %[pmax02], %[max0], %[ShuffleMask2];"
+      "pv.shuffle2.b %[pmax03], %[max0], %[ShuffleMask3];"
+      "pv.shuffle2.b %[pmax10], %[max1], %[ShuffleMask0];"
+      "pv.shuffle2.b %[pmax11], %[max1], %[ShuffleMask1];"
+      "pv.shuffle2.b %[pmax12], %[max1], %[ShuffleMask2];"
+      "pv.shuffle2.b %[pmax13], %[max1], %[ShuffleMask3];"
+      "vfmax.b %[temp00], %[pmax00], %[pmax01];"
+      "vfmax.b %[temp01], %[pmax02], %[pmax03];"
+      "vfmax.b %[temp10], %[pmax10], %[pmax11];"
+      "vfmax.b %[temp11], %[pmax12], %[pmax13];"
+      "vfmax.b %[max0], %[temp00], %[temp01];"
+      "vfmax.b %[max1], %[temp10], %[temp11];"
+      : [max0] "+&r"(max0), [max1] "+&r"(max1), [temp00] "+&r"(temp00), [temp01] "+&r"(temp01),
+        [temp10] "+&r"(temp10), [temp11] "+&r"(temp11),
+        [pmax00] "+&r"(pmax00), [pmax01] "+&r"(pmax01), [pmax02] "+&r"(pmax02), 
+        [pmax03] "+&r"(pmax03), [pmax10] "+&r"(pmax10), [pmax11] "+&r"(pmax11), 
+        [pmax12] "+&r"(pmax12), [pmax13] "+&r"(pmax13)
+      : [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
+        [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
 
+    dump_try(*(uint32_t*)&max0);
+    dump_try(*(uint32_t*)&max1);
+
+  // 2) Compute exp(x - max)
+    v4b vSum0 = (v4b)0.0f;
+    v4b vSum1 = (v4b)0.0f;
+
+    for (j = 0; j < N; j += 8) {
+      
+      v4b aVec00 = *(v4b *)&(A[i * N + j]);         // aVec00 = [a03 a02 a01 a00]
+      v4b aVec01 = *(v4b *)&(A[i * N + j+4]);       // aVec01 = [a07 a06 a05 a04]
+      v4b aVec10 = *(v4b *)&(A[(i + 1) * N + j]);   // aVec10 = [a13 a12 a11 a10]
+      v4b aVec11 = *(v4b *)&(A[(i + 1) * N + j+4]); // aVec11 = [a17 a16 a15 a14]
+      
+      v4b x00, x01, x10, x11; 
       // Compute x' = x - max(x)
       asm volatile(
-        "vfsub.b %[x0], %[aVec0], %[max];"
-        "vfsub.b %[x1], %[aVec1], %[max];"
-        "vfsub.b %[x2], %[aVec2], %[max];"
-        "vfsub.b %[x3], %[aVec3], %[max];"
-        : [x0] "+&r"(x0), [x1] "+&r"(x1), [x2] "+&r"(x2), [x3] "+&r"(x3)
-        : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2), [aVec3] "r"(aVec3), 
-          [max] "r"(max));
+        "vfsub.b %[x00], %[aVec00], %[max0];"
+        "vfsub.b %[x01], %[aVec01], %[max0];"
+        "vfsub.b %[x10], %[aVec10], %[max1];"
+        "vfsub.b %[x11], %[aVec11], %[max1];"
+        : [x00] "+&r"(x00), [x01] "+&r"(x01), [x10] "+&r"(x10), [x11] "+&r"(x11)
+        : [aVec00] "r"(aVec00), [aVec01] "r"(aVec01), [aVec10] "r"(aVec10), 
+          [aVec11] "r"(aVec11), [max0] "r"(max0), [max1] "r"(max1));
+
+      v4b xSq00, xSq01, xSq10, xSq11;
+      v4b exp00, exp01, exp10, exp11;
+      v4b temp0, temp1;
 
       // Approximate exp with Taylor Series
       asm volatile(
-        "vfmul.b %[xSq0], %[x0], %[x0];"  // x^2
-        "vfmul.b %[xSq1], %[x1], %[x1];"
-        "vfmul.b %[xSq2], %[x2], %[x2];"
-        "vfmul.b %[xSq3], %[x3], %[x3];"
-        "vfmul.b %[xSq0], %[xSq0], 0.5;"  // 0.5*x^2
-        "vfmul.b %[xSq1], %[xSq1], 0.5;"
-        "vfmul.b %[xSq2], %[xSq2], 0.5;"
-        "vfmul.b %[xSq3], %[xSq3], 0.5;"
-        "vfmac.b %[xSq0], %[x0], 1.0;"    // 1*x + 0.5*x^2
-        "vfmac.b %[xSq1], %[x1], 1.0;"
-        "vfmac.b %[xSq2], %[x2], 1.0;"
-        "vfmac.b %[xSq3], %[x3], 1.0;"
-        "vfadd.b %[exp0], %[xSq0], 1.0;"   // exp = exp(x') = exp(x - max(x))
-        "vfadd.b %[exp1], %[xSq1], 1.0;"
-        "vfadd.b %[exp2], %[xSq2], 1.0;"
-        "vfadd.b %[exp3], %[xSq3], 1.0;"
-        : [xSq0] "+&r"(xSq0), [xSq1] "+&r"(xSq1), [xSq2] "+&r"(xSq2), [xSq3] "+&r"(xSq3), 
-          [exp0] "+&r"(exp0), [exp1] "+&r"(exp1), [exp2] "+&r"(exp2), [exp3] "+&r"(exp3)
-        : [x0] "r"(x0), [x1] "r"(x1), [x2] "r"(x2), [x3] "r"(x3));
+        "vfmul.b %[xSq00], %[x00], %[x00];"      // x^2
+        "vfmul.b %[xSq01], %[x01], %[x01];"
+        "vfmul.b %[xSq10], %[x10], %[x10];"
+        "vfmul.b %[xSq11], %[x11], %[x11];"
+        "vfmul.b %[xSq00], %[xSq00], %[vHalf];"  // 0.5*x^2
+        "vfmul.b %[xSq01], %[xSq01], %[vHalf];"
+        "vfmul.b %[xSq10], %[xSq10], %[vHalf];"
+        "vfmul.b %[xSq11], %[xSq11], %[vHalf];"
+        "vfmac.b %[xSq00], %[x00], %[vOne];"    // 1*x + 0.5*x^2
+        "vfmac.b %[xSq01], %[x01], %[vOne];"
+        "vfmac.b %[xSq10], %[x10], %[vOne];"
+        "vfmac.b %[xSq11], %[x11], %[vOne];"
+        "vfadd.b %[exp00], %[xSq00], %[vOne];"   // exp = exp(x') = exp(x - max(x))
+        "vfadd.b %[exp01], %[xSq01], %[vOne];"
+        "vfadd.b %[exp10], %[xSq10], %[vOne];"
+        "vfadd.b %[exp11], %[xSq11], %[vOne]"
+        : [xSq00] "+&r"(xSq00), [xSq01] "+&r"(xSq01), [xSq10] "+&r"(xSq10), [xSq11] "+&r"(xSq11), 
+          [exp00] "+&r"(exp00), [exp01] "+&r"(exp01), [exp10] "+&r"(exp10), [exp11] "+&r"(exp11),
+          [vSum0] "+&r"(vSum0), [vSum1] "+&r"(vSum1), [temp0] "+&r"(temp0), [temp1] "+&r"(temp1) 
+        : [x00] "r"(x00), [x01] "r"(x01), [x10] "r"(x10), [x11] "r"(x11),
+          [vHalf] "r"(vHalf), [vOne] "r"(vOne));
 
-      v4b vSum, sum0, sum1, sum2, sum3;
-      // Compute sum_exp = sum(exp(x - max_x))
+      // Add exponents to row-wise sum
       asm volatile(
-        "vfadd.b %[vSum], %[exp0], %[exp1];"     //Tree reduce to scalar
-        "vfadd.b %[vSum], %[vSum], %[exp2];"
-        "vfadd.b %[vSum], %[vSum], %[exp3];"
-        "pv.shuffle2.b %[sum0], %[vSum], %[ShuffleMask0];"
-        "pv.shuffle2.b %[sum1], %[vSum], %[ShuffleMask1];"
-        "pv.shuffle2.b %[sum2], %[vSum], %[ShuffleMask2];"
-        "pv.shuffle2.b %[sum3], %[vSum], %[ShuffleMask3];"
-        "vfadd.b %[vSum], %[sum0], %[sum1];"
-        "vfadd.b %[vSum], %[vSum], %[sum2];"
-        "vfadd.b %[vSum], %[vSum], %[sum3];"
-        : [vSum] "+&r"(vSum), [sum0] "+&r"(sum0), [sum1] "+&r"(sum1),
-          [sum2] "+&r"(sum2), [sum3] "+&r"(sum3)
-        : [exp0] "r"(exp0), [exp1] "r"(exp1), [exp2] "r"(exp2), [exp3] "r"(exp3));
+        "vfadd.b %[temp0], %[exp00], %[exp01];"
+        "vfadd.b %[temp1], %[exp10], %[exp11];"
+        "vfadd.b %[vSum0], %[vSum0], %[temp0];"
+        "vfadd.b %[vSum1], %[vSum1], %[temp1];"
+        : [vSum0] "+&r"(vSum0), [vSum1] "+&r"(vSum1), [temp0] "+&r"(temp0), [temp1] "+&r"(temp1) 
+        : [exp00] "r"(exp00), [exp01] "r"(exp01), [exp10] "r"(exp10), [exp11] "r"(exp11));
 
-      v4b res0, res1, res2, res3;
+      dump_try(*(uint32_t*)&exp00);
+
+      // Store temporary variables
+      (*(v4b *)&B[i * N + j]) = exp00;
+      (*(v4b *)&B[i * N + j+4]) = exp01;
+      (*(v4b *)&B[(i + 1) * N + j]) = exp10;
+      (*(v4b *)&B[(i + 1) * N + j+4]) = exp11;
+    }
+
+    v4b sum00, sum01, sum02, sum03;
+    v4b sum10, sum11, sum12, sum13;
+    asm volatile(
+      // Broadcast each element across vector lanes for full reduction
+      "pv.shuffle2.b %[sum00], %[vSum0], %[ShuffleMask0];"
+      "pv.shuffle2.b %[sum01], %[vSum0], %[ShuffleMask1];"
+      "pv.shuffle2.b %[sum02], %[vSum0], %[ShuffleMask2];"
+      "pv.shuffle2.b %[sum03], %[vSum0], %[ShuffleMask3];"
+      "pv.shuffle2.b %[sum10], %[vSum1], %[ShuffleMask0];"
+      "pv.shuffle2.b %[sum11], %[vSum1], %[ShuffleMask1];"
+      "pv.shuffle2.b %[sum12], %[vSum1], %[ShuffleMask2];"
+      "pv.shuffle2.b %[sum13], %[vSum1], %[ShuffleMask3];"
+      "vfadd.b %[vSum0], %[sum00], %[sum01];"
+      "vfadd.b %[vSum1], %[sum10], %[sum11];"
+      "vfadd.b %[vSum0], %[vSum0], %[sum02];"
+      "vfadd.b %[vSum1], %[vSum1], %[sum12];"
+      "vfadd.b %[vSum0], %[vSum0], %[sum03];"
+      "vfadd.b %[vSum1], %[vSum1], %[sum13];"
+      : [vSum0] "+&r"(vSum0), [vSum1] "+&r"(vSum1), [sum00] "+&r"(sum00), [sum01] "+&r"(sum01),
+        [sum02] "+&r"(sum02), [sum03] "+&r"(sum03), [sum10] "+&r"(sum10), [sum11] "+&r"(sum11),
+        [sum12] "+&r"(sum12), [sum13] "+&r"(sum13)
+      : [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
+        [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
+
+    dump_try(*(uint32_t*)&vSum0);
+
+  // 3) Divide by the row-wise sum
+    for (j = 0; j < N; j += 8) {
+      v4b bVec00 = *(v4b *)&(B[i * N + j]);
+      v4b bVec01 = *(v4b *)&(B[i * N + j+4]);
+      v4b bVec10 = *(v4b *)&(B[(i + 1) * N + j]);
+      v4b bVec11 = *(v4b *)&(B[(i + 1) * N + j+4]);
+
+      v4b res00, res01, res10, res11;
       // Compute softmax = exp / sum_exp
       asm volatile(
-        "vfdiv.b %[res0], %[exp0], %[vSum];"
-        "vfdiv.b %[res1], %[exp1], %[vSum];"
-        "vfdiv.b %[res2], %[exp2], %[vSum];"
-        "vfdiv.b %[res3], %[exp3], %[vSum];"
-        : [res0] "+&r"(res0), [res1] "+&r"(res1), [res2] "+&r"(res2), [res3] "+&r"(res3)
-        : [exp0] "r"(exp0), [vSum] "r"(vSum));
+        "vfdiv.b %[res00], %[bVec00], %[vSum0];"
+        "vfdiv.b %[res01], %[bVec01], %[vSum0];"
+        "vfdiv.b %[res10], %[bVec10], %[vSum1];"
+        "vfdiv.b %[res11], %[bVec11], %[vSum1];"
+        : [res00] "+&r"(res00), [res01] "+&r"(res01), [res10] "+&r"(res10), 
+          [res11] "+&r"(res11)
+        : [bVec00] "r"(bVec00), [bVec01] "r"(bVec01), [bVec10] "r"(bVec10), 
+          [bVec11] "r"(bVec11), [vSum0] "r"(vSum0), [vSum1] "r"(vSum1));
       
-      (*(v4b *)&B[i * N + j]) = res0;
-      (*(v4b *)&B[(i + 1) * N + j]) = res1;
-      (*(v4b *)&B[(i + 2) * N + j]) = res2;
-      (*(v4b *)&B[(i + 3) * N + j]) = res3;
+      (*(v4b *)&B[i * N + j]) = res00;
+      (*(v4b *)&B[i * N + j+4]) = res01;
+      (*(v4b *)&B[(i + 1) * N + j]) = res10;
+      (*(v4b *)&B[(i + 1) * N + j+4]) = res11;
     }
-  } 
+  }
 }
