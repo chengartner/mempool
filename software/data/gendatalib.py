@@ -776,8 +776,8 @@ def generate_flayernorm(my_type=np.float32, defines={}):
         matrix_N = defines['matrix_N']
 
         # Create input matrix
-        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.my_type)
-        B = np.zeros((matrix_M, matrix_N)).astype(np.my_type)
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(my_type)
+        B = np.zeros((matrix_M, matrix_N)).astype(my_type)
 
         # Normalize matrix A (using LayerNorm)
         for i in range(matrix_M):  # Loop over each sample (row)
