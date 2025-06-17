@@ -11,12 +11,12 @@
 #include "synchronization.h"
 #include "builtins_v2.h"
 
-#include "data_norm_f8.h"
+#include "data_batchnorm_f8.h"
 
 dump(try, 8);
 
 #include "baremetal/mempool_checks.h"
-#include "baremetal/mempool_norm_f8.h"
+#include "baremetal/mempool_batchnorm_f8.h"
 
 __fp8 matrix_a[matrix_M * matrix_N]
     __attribute__((aligned(sizeof(int32_t)), section(".l1_prio")));
@@ -38,7 +38,7 @@ int main() {
 
   // Matrix Normalization
   mempool_start_benchmark();
-  normalize_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  batchnorm_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();

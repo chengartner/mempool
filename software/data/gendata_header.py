@@ -196,12 +196,15 @@ if __name__ == '__main__':
         "mimo_mmse_f16": {"func": datalib.generate_fmmse},
         "mimo_mmse_f32": {"func": datalib.generate_fmmse},
         "mimo_mmse_f8": {"func": datalib.generate_fmmse},
-        "norm_f8": {"func": datalib.generate_fnorm},
-        "norm_f16": {"func": datalib.generate_fnorm},
+        "batchnorm_f8": {"func": datalib.generate_fbatchnorm},
+        "batchnorm_f16": {"func": datalib.generate_fbatchnorm},
+        "layernorm_f8": {"func": datalib.generate_flayernorm},
+        "layernorm_f16": {"func": datalib.generate_flayernorm},
         "ofdm_f16": {"func": datalib.generate_fofdm},
         "fence": {"func": datalib.generate_iarray},
         "memcpy": {"func": datalib.generate_iarray},
         "softmax_f8": {"func": datalib.generate_fsoftmax},
+        "softmax_f16": {"func": datalib.generate_fsoftmax},
         "vit_f8": {"func": datalib.generate_fvit},
     }
 

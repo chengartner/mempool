@@ -676,7 +676,7 @@ def generate_cfft_q16(defines={}, fixed_point=15, my_type=np.int16):
 
     return [src, dst, twiddles, bitrever], defines
 
-def generate_fnorm(my_type=np.float32, defines={}):
+def generate_fbatchnorm(my_type=np.float32, defines={}):
 
     # f8: Cast correct type
     if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
@@ -740,8 +740,9 @@ def generate_fnorm(my_type=np.float32, defines={}):
     return [A, B], defines
 
 
-def generate_fsoftmax(my_type=np.float32, defines={}):
+def generate_flayernorm(my_type=np.float32, defines={}):
 
+    # f8: Cast correct type
     if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
 
         # Define dimension
@@ -750,11 +751,93 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
 
         # Create input matrix
         A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float16)
+        B = np.zeros((matrix_M, matrix_N)).astype(np.float16)
         # Cast the correct type
         A = ff.array(A, 'e5m2')
+        B = ff.array(B, 'e5m2')
 
-        # Normalize matrix A (using BatchNorm)
-        B = np.exp(A) / sum(np.exp(A))
+        # Normalize matrix A (using LayerNorm)
+        for i in range(matrix_M):  # Loop over each sample (row)
+            row = A[i]
+            mean = np.sum(row) / matrix_N
+            diff = row - mean
+            var = np.sum(diff * diff) / matrix_N
+            std = np.sqrt(var)
+            B[i] = (diff) / std
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+    # f16,f32: Use normal operation (FP type automatically retained)
+    else:
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.my_type)
+        B = np.zeros((matrix_M, matrix_N)).astype(np.my_type)
+
+        # Normalize matrix A (using LayerNorm)
+        for i in range(matrix_M):  # Loop over each sample (row)
+            row = A[i]
+            mean = np.sum(row) / matrix_N
+            diff = row - mean
+            var = np.sum(diff * diff) / matrix_N
+            std = np.sqrt(var)
+            B[i] = (diff) / std
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+    return [A, B], defines
+
+
+def generate_fsoftmax(my_type=np.float32, defines={}):
+
+    # f8: Cast correct type
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
+
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float16)
+        B = np.zeros((matrix_M, matrix_N)).astype(np.float16)
+        # Cast the correct type
+        A = ff.array(A, 'e5m2')
+        B = ff.array(B, 'e5m2')
+
+        # Calculate the row-wise softmax
+        for i in range(matrix_M):
+            a_max = np.max(A[i])
+            numerator = np.exp(A[i] - a_max)
+            denominator = np.sum(numerator)
+            B[i] = numerator / denominator
+
+        # Flatten the matrices into 1D arrays
+        A = np.reshape(A, (matrix_M * matrix_N), order='C')
+        B = np.reshape(B, (matrix_M * matrix_N), order='C')
+
+    # f16,f32: Use normal operation (FP type automatically retained)
+    else:
+        # Define dimension
+        matrix_M = defines['matrix_M']
+        matrix_N = defines['matrix_N']
+
+        # Create input matrix
+        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(my_type)
+        B = np.zeros((matrix_M, matrix_N)).astype(my_type)
+
+        # Calculate the row-wise softmax
+        for i in range(matrix_M):
+            a_max = np.max(A[i])
+            numerator = np.exp(A[i] - a_max)
+            denominator = np.sum(numerator)
+            B[i] = numerator / denominator
 
         # Flatten the matrices into 1D arrays
         A = np.reshape(A, (matrix_M * matrix_N), order='C')
