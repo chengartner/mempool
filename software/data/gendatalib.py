@@ -853,15 +853,18 @@ def generate_fencoder(my_type=np.float32, defines={}):
         # Define dimension
         dim_s = defines['dim_s']  # Sequence length
         dim_e = defines['dim_e']  # Embedding dimension
-        dim_i = defines['dim_i']
         num_heads = defines['num_heads']
         dim_h = dim_e // num_heads
 
         # Create empty matrices to store result
-        K_init = np.zeros((dim_s, dim_h))
-        Q_init = np.zeros((dim_s, dim_h))
-        V_init = np.zeros((dim_s, dim_h))
-        A_init = np.zeros((dim_s, dim_s))
+        K_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        K_init = ff.array(K_init, 'e5m2')
+        Q_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        Q_init = ff.array(Q_init, 'e5m2')
+        V_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        V_init = ff.array(V_init, 'e5m2')
+        A_init = np.zeros((dim_s, dim_s)).astype(np.float16)
+        A_init = ff.array(A_init, 'e5m2')
 
         # Create input matrix
         Input = (np.random.rand(dim_s, dim_e) - 0.5).astype(np.float16)
@@ -869,7 +872,7 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
-        S = np.zeros((dim_s, dim_s)).astype(np.float16)
+        S = np.zeros((num_heads, dim_s, dim_s)).astype(np.float16)
         Result = np.zeros((dim_s, dim_e)).astype(np.float16)
         
         # Cast the correct type
@@ -895,29 +898,30 @@ def generate_fencoder(my_type=np.float32, defines={}):
         V = np.transpose(V, (1,0,2))
 
         # 3) Create attention matrix
-        Kt = np.transpose(K, (1,0))
+        Kt = np.transpose(K, (0,2,1))  # (heads, depth, seq_len)
         A = np.matmul(Q, Kt)
 
         # Softmax
-        for i in range(dim_s):
-            a_max = np.max(A[i])
-            numerator = np.exp(A[i] - a_max)
-            denominator = np.sum(numerator)
-            S[i] = numerator / denominator
+        for h in range(num_heads):
+            for i in range(dim_s): 
+                a_max = np.max(A[h, i])
+                numerator = np.exp(A[h, i] - a_max)
+                denominator = np.sum(numerator)
+                S[h, i] = numerator / denominator
 
         # Create output matrix
         O = np.matmul(S, V)
 
+        # 3) Combine attention heads
+        O = np.transpose(O, (1,0,2))
+        O = np.reshape(O, (dim_s, dim_e))
+
         # Scale output matrix
         O_scaled = np.matmul(O, Wo) #??????
 
-        # 3) Combine attention heads
-        O_concat = np.transpose(O_concat, (1,0,2))
-        O_concat = np.reshape(O_concat, (dim_s, dim_e))
-
         # 4) Normalize output matrix (using LayerNorm)
         for i in range(dim_s):
-            row = O_concat[i]
+            row = O_scaled[i]
             mean = np.sum(row) / dim_e
             diff = row - mean
             var = np.sum(diff * diff) / dim_e
@@ -929,22 +933,21 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wk = np.reshape(Wk, (dim_e * dim_e), order='C')
         Wq = np.reshape(Wq, (dim_e * dim_e), order='C')
         Wv = np.reshape(Wv, (dim_e * dim_e), order='C')
-        Wo = np.reshape(UpScale, (dim_e * dim_e), order='C')
+        Wo = np.reshape(Wo, (dim_e * dim_e), order='C')
         Result = np.reshape(Result, (dim_s * dim_e), order='C')
 
     else:
         # Define dimension
         dim_s = defines['dim_s']  # Sequence length
         dim_e = defines['dim_e']  # Embedding dimension
-        dim_i = defines['dim_i']
         num_heads = defines['num_heads']
         dim_h = dim_e // num_heads
 
         # Create empty matrices to store result
-        K_init = np.zeros(dim_s, dim_s)
-        Q_init = np.zeros(dim_s, dim_s)
-        V_init = np.zeros(dim_s, dim_s)
-        A_init = np.zeros(dim_s, dim_s)
+        K_init = np.zeros((dim_s, dim_h)).astype(my_type)
+        Q_init = np.zeros((dim_s, dim_h)).astype(my_type)
+        V_init = np.zeros((dim_s, dim_h)).astype(my_type)
+        A_init = np.zeros((dim_s, dim_s)).astype(my_type)
 
         # Create input matrix
         Input = (np.random.rand(dim_s, dim_e) - 0.5).astype(my_type)
@@ -952,9 +955,9 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
         Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
         Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
-        S = np.zeros(dim_s, dim_s).astype(my_type)
-        Result = np.zeros(dim_s, dim_e).astype(my_type)
-
+        S = np.zeros((num_heads, dim_s, dim_s)).astype(my_type)
+        Result = np.zeros((dim_s, dim_e)).astype(my_type)
+        
         # 1) Generate QKV matrices
         K = np.matmul(Input, Wk)
         Q = np.matmul(Input, Wq)
@@ -969,29 +972,30 @@ def generate_fencoder(my_type=np.float32, defines={}):
         V = np.transpose(V, (1,0,2))
 
         # 3) Create attention matrix
-        Kt = np.transpose(K, (1,0))
+        Kt = np.transpose(K, (0,2,1))  # (heads, depth, seq_len)
         A = np.matmul(Q, Kt)
 
         # Softmax
-        for i in range(dim_s):
-            a_max = np.max(A[i])
-            numerator = np.exp(A[i] - a_max)
-            denominator = np.sum(numerator)
-            S[i] = numerator / denominator
+        for h in range(num_heads):
+            for i in range(dim_s): 
+                a_max = np.max(A[h, i])
+                numerator = np.exp(A[h, i] - a_max)
+                denominator = np.sum(numerator)
+                S[h, i] = numerator / denominator
 
         # Create output matrix
         O = np.matmul(S, V)
 
+        # 3) Combine attention heads
+        O = np.transpose(O, (1,0,2))
+        O = np.reshape(O, (dim_s, dim_e))
+
         # Scale output matrix
         O_scaled = np.matmul(O, Wo) #??????
 
-        # 3) Combine attention heads
-        O_concat = np.transpose(O_concat, (1,0,2))
-        O_concat = np.reshape(O_concat, (dim_s, dim_e))
-
         # 4) Normalize output matrix (using LayerNorm)
         for i in range(dim_s):
-            row = O_concat[i]
+            row = O_scaled[i]
             mean = np.sum(row) / dim_e
             diff = row - mean
             var = np.sum(diff * diff) / dim_e
@@ -1003,10 +1007,14 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wk = np.reshape(Wk, (dim_e * dim_e), order='C')
         Wq = np.reshape(Wq, (dim_e * dim_e), order='C')
         Wv = np.reshape(Wv, (dim_e * dim_e), order='C')
-        Wo = np.reshape(UpScale, (dim_e * dim_e), order='C')
+        Wo = np.reshape(Wo, (dim_e * dim_e), order='C')
         Result = np.reshape(Result, (dim_s * dim_e), order='C')
 
-    return [Input, Wk, Wq, Wv, K_init, Q_init, V_init, A_init,
+        return [Input, Wk, Wq, Wv, Wo, K_init, Q_init, V_init, 
+                A_init, Result], defines
+
+
+    return [Input, Wk, Wq, Wv, 
                 Wo, Result], defines
 
 
