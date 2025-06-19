@@ -115,7 +115,7 @@ int main() {
   mempool_barrier(num_cores);
 
 // ATTENTION HEAD SPLITTING -----------
-  // Number of heads = 12
+  // Number of heads = 16
   // Process attention heads in parallel
   if (core_id < num_heads) {
 
@@ -126,38 +126,39 @@ int main() {
     }
     mempool_barrier(num_cores);
 
+    uint32_t core_per_head = num_cores / num_heads;
+
     // TRANSPOSE
       // Focus is on the speed-up gained, not the accuracy / correctness
       // Use the same matrix K for simplicity
 
     // Matmul based on inner product
     matmul_4x4_parallel_inner_f8vec(matrix_qkv, matrix_k, matrix_a, dim_s, dim_h,
-                               dim_s, core_id, num_cores);
+                               dim_s, core_id, core_per_head);
     mempool_barrier(num_cores);
 
   // SOFTMAX APPLICATION --------------
-    softmax_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
-                               core_id, num_cores);
+    softmax_parallel_f8vec(matrix_a, matrix_s, dim_s, dim_s,
+                               core_id, core_per_head);
     mempool_barrier(num_cores);
 
   // OUTPUT MATRIX GENERATION -----------
     // Matmul based on inner product
-    matmul_4x4_parallel_inner_f8vec(matrix_a, matrix_v, matrix_o, dim_s, dim_s,
-                               dim_h, core_id, num_cores);
+    matmul_4x4_parallel_inner_f8vec(matrix_s, matrix_v, matrix_o, dim_s, dim_s,
+                               dim_h, core_id, core_per_head);
     mempool_barrier(num_cores);
 
   }
 
 // SCALE ----------------------------
   // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_o_norm, matrix_upscale, matrix_o_scaled,
+  matmul_4x4_parallel_inner_f8vec(matrix_o, matrix_Wo, matrix_o_scaled,
                  dim_s, dim_h, dim_s, core_id, num_cores);
   mempool_barrier(num_cores);
 
  // NORMALIZATION ---------------------
-  layernorm_parallel_f8vec(matrix_o, matrix_o_norm, dim_s,
+  layernorm_parallel_f8vec(matrix_o_scaled, matrix_result, dim_s,
                                 dim_h, core_id, num_cores);
-
 
 
   mempool_stop_benchmark(); 

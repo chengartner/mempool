@@ -41,6 +41,7 @@ __fp16 matrix_upscale[dim_s * dim_s]
 int main() {
   uint32_t core_id = mempool_get_core_id();
   uint32_t num_cores = mempool_get_core_count();
+  uint32_t dim_h = dim_e / num_heads;
   
   // Initialize barrier and synchronize
   mempool_barrier_init(core_id);
@@ -52,44 +53,44 @@ int main() {
 // 1) Generate matrix K
   // Initialize matrices
   if (core_id == 0) {
-  	// Store matrices from l2 to l1 memory
-    dma_memcpy_blocking(matrix_image, l2_Image,
+    // Store matrices from l2 to l1 memory
+    dma_memcpy_blocking(matrix_input, l2_Input,
                         (dim_s * dim_e) * sizeof(int8_t));
     dma_memcpy_blocking(matrix_Wqkv, l2_Wk,
-                        (dim_e * dim_h) * sizeof(int8_t));
+                        (dim_e * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
-  // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_image, matrix_Wqkv, matrix_qkv, dim_s, 
-                             dim_e, dim_h, core_id, num_cores);
+  // Matmul based on outer product
+  matmul_4x4_parallel_outer_f8vec(matrix_input, matrix_Wqkv, matrix_qkv, dim_s, 
+                             dim_e, dim_e, core_id, num_cores);
   mempool_barrier(num_cores);
 
   // Store matrices
   if (core_id == 0) {
-  	// Store resulting matrix from l1 to l2 memory
-    dma_memcpy_blocking(l2_K, matrix_qkv, (dim_s * dim_h) * sizeof(int8_t));
+    // Store resulting matrix from l1 to l2 memory
+    dma_memcpy_blocking(l2_K, matrix_qkv, (dim_s * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
 // 2) Generate matrix Q
   // Initialize matrices
   if (core_id == 0) {
-  	// Store matrix from l2 to l1 memory (replace previous l2_Wk with l2_Wq)
+    // Store matrix from l2 to l1 memory (replace previous l2_Wk with l2_Wq)
     dma_memcpy_blocking(matrix_Wqkv, l2_Wq,
-                        (dim_e * dim_h) * sizeof(int8_t));
+                        (dim_e * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
   // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_image, matrix_Wqkv, matrix_qkv, dim_s, 
-                             dim_e, dim_h, core_id, num_cores);
+  matmul_4x4_parallel_outer_f8vec(matrix_input, matrix_Wqkv, matrix_qkv, dim_s, 
+                             dim_e, dim_e, core_id, num_cores);
   mempool_barrier(num_cores);
 
   // Store matrices
   if (core_id == 0) {
-  	// Store resulting matrix from l1 to l2 memory
-    dma_memcpy_blocking(l2_Q, matrix_qkv, (dim_s * dim_h) * sizeof(int8_t));
+    // Store resulting matrix from l1 to l2 memory
+    dma_memcpy_blocking(l2_Q, matrix_qkv, (dim_s * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
@@ -97,75 +98,68 @@ int main() {
   // Initialize matrices
   if (core_id == 0) {
     dma_memcpy_blocking(matrix_Wqkv, l2_Wv,
-                        (dim_e * dim_h) * sizeof(int8_t));
+                        (dim_e * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
   // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_image, matrix_Wqkv, matrix_qkv, dim_s, 
-                             dim_e, dim_h, core_id, num_cores);
+  matmul_4x4_parallel_outer_f8vec(matrix_image, matrix_Wqkv, matrix_qkv, dim_s, 
+                             dim_e, dim_e, core_id, num_cores);
   mempool_barrier(num_cores);
   
   // Store matrices
   if (core_id == 0) {
-  	// Store resulting matrix from l1 to l2 memory
-    dma_memcpy_blocking(l2_V, matrix_qkv, (dim_s * dim_h) * sizeof(int8_t));
+    // Store resulting matrix from l1 to l2 memory
+    dma_memcpy_blocking(l2_V, matrix_qkv, (dim_s * dim_e) * sizeof(int8_t));
   }
   mempool_barrier(num_cores);
 
 // ATTENTION HEAD SPLITTING -----------
-  // Number of heads = 12
-  // Process 4 attention heads in parallel
+  // Number of heads = 16
+  // Process attention heads in parallel
+  if (core_id < num_heads) {
 
+  // ATTENTION MATRIX GENERATION --------
+    if (core_id == 0) {
+      dma_memcpy_blocking(matrix_qkv, l2_Q,
+                          (dim_s * dim_e) * sizeof(int8_t));
+    }
+    mempool_barrier(num_cores);
 
-// ATTENTION MATRIX GENERATION --------
-  if (core_id == 0) {
-    dma_memcpy_blocking(matrix_qkv, l2_Wq,
-                        (dim_e * dim_h) * sizeof(int8_t));
+    uint32_t core_per_head = num_cores / num_heads;
+
+    // TRANSPOSE
+      // Focus is on the speed-up gained, not the accuracy / correctness
+      // Use the same matrix K for simplicity
+
+    // Matmul based on inner product
+    matmul_4x4_parallel_inner_f8vec(matrix_qkv, matrix_k, matrix_a, dim_s, dim_h,
+                               dim_s, core_id, core_per_head);
+    mempool_barrier(num_cores);
+
+  // SOFTMAX APPLICATION --------------
+    softmax_parallel_f8vec(matrix_a, matrix_s, dim_s, dim_s,
+                               core_id, core_per_head);
+    mempool_barrier(num_cores);
+
+  // OUTPUT MATRIX GENERATION -----------
+    // Matmul based on inner product
+    matmul_4x4_parallel_inner_f8vec(matrix_s, matrix_v, matrix_o, dim_s, dim_s,
+                               dim_h, core_id, core_per_head);
+    mempool_barrier(num_cores);
+
   }
-  mempool_barrier(num_cores);
 
-  // TRANSPOSE
-    // Focus is on the speed-up gained, not the accuracy / correctness
-    // Use the same matrix K for simplicity
-
+// SCALE ----------------------------
   // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_qkv, matrix_k, matrix_a, dim_s, dim_h,
-                             dim_s, core_id, num_cores);
+  matmul_4x4_parallel_inner_f8vec(matrix_o, matrix_Wo, matrix_o_scaled,
+                 dim_s, dim_h, dim_s, core_id, num_cores);
   mempool_barrier(num_cores);
-
-
-// FLASH ATTENTION --------------------
-  // TODO
-  softmax_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
-                             core_id, num_cores);
-  mempool_barrier(num_cores);
-
-
-// OUTPUT MATRIX GENERATION -----------
-  // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_a, matrix_v, matrix_o, dim_s, dim_s,
-                             dim_h, core_id, num_cores);
-  mempool_barrier(num_cores);
-
 
  // NORMALIZATION ---------------------
-  normalize_2x4_parallel_f8vec(matrix_o, matrix_o_norm, dim_s,
+  layernorm_parallel_f8vec(matrix_o_scaled, matrix_result, dim_s,
                                 dim_h, core_id, num_cores);
 
-
-// UPSCALE ----------------------------
-  // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_o_norm, matrix_upscale, matrix_o_scaled,
-  							 dim_s, dim_h, dim_s, core_id, num_cores);
-  mempool_barrier(num_cores);
-
-
-// DOWNSCALE --------------------------
-  // Matmul based on inner product
-  matmul_4x4_parallel_inner_f8vec(matrix_o_scaled, matrix_downscale, matrix_res, 
-  							 dim_s, dim_h, dim_s, core_id, num_cores);
-  mempool_barrier(num_cores);
 
   mempool_stop_benchmark(); 
 #endif 
