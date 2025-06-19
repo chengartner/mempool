@@ -855,12 +855,13 @@ def generate_fencoder(my_type=np.float32, defines={}):
         dim_e = defines['dim_e']  # Embedding dimension
         dim_i = defines['dim_i']
         num_heads = defines['num_heads']
+        dim_h = dim_e // num_heads
 
         # Create empty matrices to store result
-        K_init = np.zeros(dim_s, dim_h)
-        Q_init = np.zeros(dim_s, dim_h)
-        V_init = np.zeros(dim_s, dim_h)
-        A_init = np.zeros(dim_s, dim_s)
+        K_init = np.zeros((dim_s, dim_h))
+        Q_init = np.zeros((dim_s, dim_h))
+        V_init = np.zeros((dim_s, dim_h))
+        A_init = np.zeros((dim_s, dim_s))
 
         # Create input matrix
         Input = (np.random.rand(dim_s, dim_e) - 0.5).astype(np.float16)
@@ -868,8 +869,8 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
-        S = np.zeros(dim_s, dim_s).astype(np.float16)
-        Result = np.zeros(dim_s, dim_e).astype(np.float16)
+        S = np.zeros((dim_s, dim_s)).astype(np.float16)
+        Result = np.zeros((dim_s, dim_e)).astype(np.float16)
         
         # Cast the correct type
         Input = ff.array(Input, 'e5m2')
@@ -886,7 +887,6 @@ def generate_fencoder(my_type=np.float32, defines={}):
         V = np.matmul(Input, Wv)
 
         # 2) Split attention heads
-        dim_h = dim_e // num_heads
         K = np.reshape(K, (dim_s, num_heads, dim_h))
         K = np.transpose(K, (1,0,2))
         Q = np.reshape(Q, (dim_s, num_heads, dim_h))
