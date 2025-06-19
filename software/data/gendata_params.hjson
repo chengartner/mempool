@@ -504,7 +504,7 @@
     "defines": [
       ("dim_s", 196)
       ("dim_e", 256)
-      ("num_heads", 1024)
+      ("num_heads", 16)
       ("dim_i", 1024)
     ]
     "arrays": [
@@ -516,8 +516,7 @@
       ("__fp8", "l2_Q")
       ("__fp8", "l2_V")
       ("__fp8", "l2_A")
-      ("__fp8", "l2_UpScale")
-      ("__fp8", "l2_DownScale")
+      ("__fp8", "l2_Wo")
       ("__fp8", "l2_Result")
     ]
   },

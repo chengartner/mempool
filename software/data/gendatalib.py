@@ -932,8 +932,82 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wo = np.reshape(UpScale, (dim_e * dim_e), order='C')
         Result = np.reshape(Result, (dim_s * dim_e), order='C')
 
+    else:
+        # Define dimension
+        dim_s = defines['dim_s']  # Sequence length
+        dim_e = defines['dim_e']  # Embedding dimension
+        dim_i = defines['dim_i']
+        num_heads = defines['num_heads']
+        dim_h = dim_e // num_heads
+
+        # Create empty matrices to store result
+        K_init = np.zeros(dim_s, dim_s)
+        Q_init = np.zeros(dim_s, dim_s)
+        V_init = np.zeros(dim_s, dim_s)
+        A_init = np.zeros(dim_s, dim_s)
+
+        # Create input matrix
+        Input = (np.random.rand(dim_s, dim_e) - 0.5).astype(my_type)
+        Wk = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
+        Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
+        Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
+        Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(my_type)
+        S = np.zeros(dim_s, dim_s).astype(my_type)
+        Result = np.zeros(dim_s, dim_e).astype(my_type)
+
+        # 1) Generate QKV matrices
+        K = np.matmul(Input, Wk)
+        Q = np.matmul(Input, Wq)
+        V = np.matmul(Input, Wv)
+
+        # 2) Split attention heads
+        K = np.reshape(K, (dim_s, num_heads, dim_h))
+        K = np.transpose(K, (1,0,2))
+        Q = np.reshape(Q, (dim_s, num_heads, dim_h))
+        Q = np.transpose(Q, (1,0,2))
+        V = np.reshape(V, (dim_s, num_heads, dim_h))
+        V = np.transpose(V, (1,0,2))
+
+        # 3) Create attention matrix
+        Kt = np.transpose(K, (1,0))
+        A = np.matmul(Q, Kt)
+
+        # Softmax
+        for i in range(dim_s):
+            a_max = np.max(A[i])
+            numerator = np.exp(A[i] - a_max)
+            denominator = np.sum(numerator)
+            S[i] = numerator / denominator
+
+        # Create output matrix
+        O = np.matmul(S, V)
+
+        # Scale output matrix
+        O_scaled = np.matmul(O, Wo) #??????
+
+        # 3) Combine attention heads
+        O_concat = np.transpose(O_concat, (1,0,2))
+        O_concat = np.reshape(O_concat, (dim_s, dim_e))
+
+        # 4) Normalize output matrix (using LayerNorm)
+        for i in range(dim_s):
+            row = O_concat[i]
+            mean = np.sum(row) / dim_e
+            diff = row - mean
+            var = np.sum(diff * diff) / dim_e
+            std = np.sqrt(var)
+            Result[i] = (diff) / std
+
+        # Flatten the matrices into 1D arrays
+        Input = np.reshape(Input, (dim_s * dim_e), order='C')
+        Wk = np.reshape(Wk, (dim_e * dim_e), order='C')
+        Wq = np.reshape(Wq, (dim_e * dim_e), order='C')
+        Wv = np.reshape(Wv, (dim_e * dim_e), order='C')
+        Wo = np.reshape(UpScale, (dim_e * dim_e), order='C')
+        Result = np.reshape(Result, (dim_s * dim_e), order='C')
+
     return [Input, Wk, Wq, Wv, K_init, Q_init, V_init, A_init,
-                UpScale, DownScale, Result], defines
+                Wo, Result], defines
 
 
 def generate_fvit(my_type=np.float32, defines={}):
