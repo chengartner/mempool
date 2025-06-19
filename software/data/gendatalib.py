@@ -868,14 +868,17 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
         Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
+        S = np.zeros(dim_s, dim_s).astype(np.float16)
+        Result = np.zeros(dim_s, dim_e).astype(np.float16)
         
         # Cast the correct type
         Input = ff.array(Input, 'e5m2')
         Wk = ff.array(Wk, 'e5m2')
         Wq = ff.array(Wq, 'e5m2')
         Wv = ff.array(Wv, 'e5m2')
-        UpScale = ff.array(UpScale, 'e5m2')
-        DownScale = ff.array(DownScale, 'e5m2')
+        Wo = ff.array(Wo, 'e5m2')
+        S = ff.array(S, 'e5m2')
+        Result = ff.array(Result, 'e5m2')
 
         # 1) Generate QKV matrices
         K = np.matmul(Input, Wk)
@@ -900,7 +903,7 @@ def generate_fencoder(my_type=np.float32, defines={}):
             a_max = np.max(A[i])
             numerator = np.exp(A[i] - a_max)
             denominator = np.sum(numerator)
-            S[i] = numerator / denominator      # DEFINE S SOMEEWHEREE
+            S[i] = numerator / denominator
 
         # Create output matrix
         O = np.matmul(S, V)
