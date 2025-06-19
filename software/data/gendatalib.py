@@ -846,6 +846,93 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
     return [A, B], defines
 
 
+def generate_fencoder(my_type=np.float32, defines={}):
+
+    if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
+        
+        # Define dimension
+        dim_s = defines['dim_s']  # Sequence length
+        dim_e = defines['dim_e']  # Embedding dimension
+        dim_i = defines['dim_i']
+        num_heads = defines['num_heads']
+
+        # Create empty matrices to store result
+        K_init = np.zeros(dim_s, dim_h)
+        Q_init = np.zeros(dim_s, dim_h)
+        V_init = np.zeros(dim_s, dim_h)
+        A_init = np.zeros(dim_s, dim_s)
+
+        # Create input matrix
+        Input = (np.random.rand(dim_s, dim_e) - 0.5).astype(np.float16)
+        Wk = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
+        Wq = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
+        Wv = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
+        Wo = (np.random.rand(dim_e, dim_e) - 0.5).astype(np.float16)
+        
+        # Cast the correct type
+        Input = ff.array(Input, 'e5m2')
+        Wk = ff.array(Wk, 'e5m2')
+        Wq = ff.array(Wq, 'e5m2')
+        Wv = ff.array(Wv, 'e5m2')
+        UpScale = ff.array(UpScale, 'e5m2')
+        DownScale = ff.array(DownScale, 'e5m2')
+
+        # 1) Generate QKV matrices
+        K = np.matmul(Input, Wk)
+        Q = np.matmul(Input, Wq)
+        V = np.matmul(Input, Wv)
+
+        # 2) Split attention heads
+        dim_h = dim_e // num_heads
+        K = np.reshape(K, (dim_s, num_heads, dim_h))
+        K = np.transpose(K, (1,0,2))
+        Q = np.reshape(Q, (dim_s, num_heads, dim_h))
+        Q = np.transpose(Q, (1,0,2))
+        V = np.reshape(V, (dim_s, num_heads, dim_h))
+        V = np.transpose(V, (1,0,2))
+
+        # 3) Create attention matrix
+        Kt = np.transpose(K, (1,0))
+        A = np.matmul(Q, Kt)
+
+        # Softmax
+        for i in range(dim_s):
+            a_max = np.max(A[i])
+            numerator = np.exp(A[i] - a_max)
+            denominator = np.sum(numerator)
+            S[i] = numerator / denominator      # DEFINE S SOMEEWHEREE
+
+        # Create output matrix
+        O = np.matmul(S, V)
+
+        # Scale output matrix
+        O_scaled = np.matmul(O, Wo) #??????
+
+        # 3) Combine attention heads
+        O_concat = np.transpose(O_concat, (1,0,2))
+        O_concat = np.reshape(O_concat, (dim_s, dim_e))
+
+        # 4) Normalize output matrix (using LayerNorm)
+        for i in range(dim_s):
+            row = O_concat[i]
+            mean = np.sum(row) / dim_e
+            diff = row - mean
+            var = np.sum(diff * diff) / dim_e
+            std = np.sqrt(var)
+            Result[i] = (diff) / std
+
+        # Flatten the matrices into 1D arrays
+        Input = np.reshape(Input, (dim_s * dim_e), order='C')
+        Wk = np.reshape(Wk, (dim_e * dim_e), order='C')
+        Wq = np.reshape(Wq, (dim_e * dim_e), order='C')
+        Wv = np.reshape(Wv, (dim_e * dim_e), order='C')
+        Wo = np.reshape(UpScale, (dim_e * dim_e), order='C')
+        Result = np.reshape(Result, (dim_s * dim_e), order='C')
+
+    return [Input, Wk, Wq, Wv, K_init, Q_init, V_init, A_init,
+                UpScale, DownScale, Result], defines
+
+
 def generate_fvit(my_type=np.float32, defines={}):
 
     if f"{my_type}" == f"{ff.FlexFloat('e5m2')}":
