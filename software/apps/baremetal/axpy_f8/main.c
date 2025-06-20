@@ -13,8 +13,6 @@
 #include "synchronization.h"
 #include "builtins_v2.h"
 
-//dump(try, 8);
-
 #include "data_axpy_f8.h"
 
 #include "baremetal/mempool_axpy_f8.h"
@@ -49,7 +47,6 @@ int main() {
   mempool_barrier(num_cores);
   // Check results
   if (core_id == 0) {
-    //dump_try(*(uint32_t*)&l1_Y[0]);
     uint32_t clock_cycles = (time_end - time_init);
     printf("\nKernel execution takes %d clock cycles\n", clock_cycles);
   }
