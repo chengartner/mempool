@@ -26,36 +26,33 @@ void layernorm_parallel_f16vec(const __fp16 *__restrict__ A,
   	: [vInvN] "+&r"(vInvN)
   	: [InvN] "r"(InvN));
 
-  const unsigned ShuffleMask1 = 0x00020002; // [a b] => [a a]
-  const unsigned ShuffleMask0 = 0x00030003; // [a b] => [b b]
-
   for (i = core_id * 2; i < M; i += numThreads * 2) {
 
-  	v2h vSum0 = (v2h)0.0f, vSum1 = (v2h)0.0f;
+    v2h vSum0 = (v2h)0.0f, vSum1 = (v2h)0.0f;
   	v2h vSumSq0 = (v2h)0.0f, vSumSq1 = (v2h)0.0f;
 
     for (j = 0; j < N; j += 4) {
 
       v2h aVec00 = *(v2h *)&(A[i * N + j]);
-      v2h aVec01 = *(v2h *)&(A[i * N + j+2]);
       v2h aVec10 = *(v2h *)&(A[(i + 1) * N + j]);
+      v2h aVec01 = *(v2h *)&(A[i * N + j+2]);
       v2h aVec11 = *(v2h *)&(A[(i + 1) * N + j+2]);
       
       v2h aVecSq00, aVecSq01, aVecSq10, aVecSq11;
 
       asm volatile(
-        // Accumulate sum(x)
+        // 1) Accumulate sum(x): Accumulate aVeci0 and aVeci1 in vSumi
+        // 2) Accumulate sum(x^2): Square aVecji and then accumulate in vSumSqi
         "vfadd.h %[vSum0], %[vSum0], %[aVec00];"
         "vfadd.h %[vSum1], %[vSum1], %[aVec10];"
         "vfmul.h %[aVecSq00], %[aVec00], %[aVec00];"
-        "vfmul.h %[aVecSq01], %[aVec01], %[aVec01];"
         "vfmul.h %[aVecSq10], %[aVec10], %[aVec10];"
+        "vfmul.h %[aVecSq01], %[aVec01], %[aVec01];"
         "vfmul.h %[aVecSq11], %[aVec11], %[aVec11];"
-        "vfadd.h %[vSum0], %[vSum0], %[aVec01];"
-        "vfadd.h %[vSum1], %[vSum1], %[aVec11];"
-        // Accumulate sum(x^2)
         "vfadd.h %[vSumSq0], %[vSumSq0], %[aVecSq00];"
         "vfadd.h %[vSumSq1], %[vSumSq1], %[aVecSq10];"
+        "vfadd.h %[vSum0], %[vSum0], %[aVec01];"
+        "vfadd.h %[vSum1], %[vSum1], %[aVec11];"
         "vfadd.h %[vSumSq0], %[vSumSq0], %[aVecSq01];"
         "vfadd.h %[vSumSq1], %[vSumSq1], %[aVecSq11];"
         : [vSum0] "+&r"(vSum0), [vSum1] "+&r"(vSum1), [vSumSq0] "+&r"(vSumSq0),
@@ -65,6 +62,8 @@ void layernorm_parallel_f16vec(const __fp16 *__restrict__ A,
           [aVec11] "r"(aVec11));
     }
 
+    unsigned ShuffleMask1 = 0x00020002; // [a b] => [a a]
+    unsigned ShuffleMask0 = 0x00030003; // [a b] => [b b]
     v2h sum00, sum01, sum10, sum11;
     v2h sumSq00, sumSq01, sumSq10, sumSq11;
     // Reduce vector sum to one sum (replicated 2 times)
@@ -123,16 +122,16 @@ void layernorm_parallel_f16vec(const __fp16 *__restrict__ A,
       v2h aNorm00, aNorm01, aNorm10, aNorm11;
 
       asm volatile(
-    	// Compute: aVec0 - vMean
-    	"vfsub.h %[aNorm00], %[aVec00], %[vMean0];"
-    	"vfsub.h %[aNorm01], %[aVec01], %[vMean0];"
-      "vfsub.h %[aNorm10], %[aVec10], %[vMean1];"
-      "vfsub.h %[aNorm11], %[aVec11], %[vMean1];"
-    	// Compute: aNorm0 / vStd
-    	"vfdiv.h %[aNorm00], %[aNorm00], %[vStd0];"
-    	"vfdiv.h %[aNorm01], %[aNorm01], %[vStd0];"
-      "vfdiv.h %[aNorm10], %[aNorm10], %[vStd1];"
-      "vfdiv.h %[aNorm11], %[aNorm11], %[vStd1];"
+    	  // Compute: aVec0 - vMean
+    	  "vfsub.h %[aNorm00], %[aVec00], %[vMean0];"
+    	  "vfsub.h %[aNorm01], %[aVec01], %[vMean0];"
+        "vfsub.h %[aNorm10], %[aVec10], %[vMean1];"
+        "vfsub.h %[aNorm11], %[aVec11], %[vMean1];"
+    	  // Compute: aNorm0 / vStd
+    	  "vfdiv.h %[aNorm00], %[aNorm00], %[vStd0];"
+    	  "vfdiv.h %[aNorm01], %[aNorm01], %[vStd0];"
+        "vfdiv.h %[aNorm10], %[aNorm10], %[vStd1];"
+        "vfdiv.h %[aNorm11], %[aNorm11], %[vStd1];"
         : [aNorm00] "+&r"(aNorm00), [aNorm01] "+&r"(aNorm01), 
           [aNorm10] "+&r"(aNorm10), [aNorm11] "+&r"(aNorm11)
         : [aVec00] "r"(aVec00), [aVec01] "r"(aVec01),
