@@ -23,7 +23,6 @@ void batchnorm_parallel_f16vec(const __fp16 *__restrict__ A,
 
   asm volatile(
   	"vfcpka.h.s %[vInvM], %[InvM], %[InvM];" //TODO
-    "vfcpka.h.s %[vInvM], %[InvM], %[InvM];"
   	: [vInvM] "+&r"(vInvM)
   	: [InvM] "r"(InvM));
 
@@ -42,12 +41,12 @@ void batchnorm_parallel_f16vec(const __fp16 *__restrict__ A,
       asm volatile(
         // Accumulate sum(x)
         "vfadd.h %[vSum], %[vSum], %[aVec0];"
-        "vfmul.h %[aVecSq0], %[aVec0], %[aVec0];"
         "vfmul.h %[aVecSq1], %[aVec1], %[aVec1];"
+        "vfmul.h %[aVecSq0], %[aVec0], %[aVec0];"
         "vfadd.h %[vSum], %[vSum], %[aVec1];"
         // Accumulate sum(x^2)
-        "vfadd.h %[vSumSq], %[vSumSq], %[aVecSq0];"
         "vfadd.h %[vSumSq], %[vSumSq], %[aVecSq1];"
+        "vfadd.h %[vSumSq], %[vSumSq], %[aVecSq0];"
         : [vSum] "+&r"(vSum), [vSumSq] "+&r"(vSumSq),
           [aVecSq0] "+&r"(aVecSq0), [aVecSq1] "+&r"(aVecSq1)
         : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1));
@@ -69,9 +68,6 @@ void batchnorm_parallel_f16vec(const __fp16 *__restrict__ A,
       : [vMean] "+&r"(vMean), [vVar] "+&r"(vVar), [vStd] "+&r"(vStd),
     	[vInvM] "+&r"(vInvM), [vMeanSq] "+&r"(vMeanSq)
       : [vSum] "r"(vSum), [vSumSq] "r"(vSumSq));
-
-    //dump_try(*(uint32_t*)&vVar);
-    //dump_try(*(uint32_t*)&vStd);
 
     for (i = 0; i < M; i += 4) {
 
