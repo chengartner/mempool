@@ -22,54 +22,6 @@ void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
   v4b vInvM;
 
   asm volatile(
-    "vfcpka.b.s %[vInvM], %[InvM], %[InvM];"
-    "vfcpkb.b.s %[vInvM], %[InvM], %[InvM];"
-    : [vInvM] "+&r"(vInvM)
-    : [InvM] "r"(InvM));
-
-  for (j = core_id * 4; j < N; j += numThreads * 4) {
-
-    for (i = 0; i < M; i += 4) {
-
-      v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
-      v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
-      v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
-      v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
-      
-      v4b aNorm0, aNorm1, aNorm2, aNorm3;
-
-      asm volatile(
-      // Compute: aVec0 - vMean
-      "vfsqrt.b %[aNorm0], %[aVec0];"
-      //"vfsqrt.b %[aNorm1], %[aVec1];"
-      //"vfsqrt.b %[aNorm2], %[aVec2];"
-      //"vfsqrt.b %[aNorm3], %[aVec3];"
-        : [aNorm0] "+&r"(aNorm0), [aNorm1] "+&r"(aNorm1), 
-          [aNorm2] "+&r"(aNorm2), [aNorm3] "+&r"(aNorm3)
-        : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1),
-          [aVec2] "r"(aVec2), [aVec3] "r"(aVec3));
-      
-      (*(v4b *)&B[i * N + j]) = aNorm0;
-      (*(v4b *)&B[(i + 1) * N + j]) = aNorm1;
-      (*(v4b *)&B[(i + 2) * N + j]) = aNorm2;
-      (*(v4b *)&B[(i + 3) * N + j]) = aNorm3;
-    }
-  }
-}
-
-/*
-void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
-                                __fp8 *__restrict__ B, uint32_t M,
-                                uint32_t N, uint32_t core_id,
-                                uint32_t numThreads) {
-  
-  uint32_t i = 0; // loop counter for M
-  uint32_t j = 0; // loop counter for N
-
-  float InvM = 1.0f / (float)M;
-  v4b vInvM;
-
-  asm volatile(
   	"vfcpka.b.s %[vInvM], %[InvM], %[InvM];"
     "vfcpkb.b.s %[vInvM], %[InvM], %[InvM];"
   	: [vInvM] "+&r"(vInvM)
@@ -115,11 +67,11 @@ void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
       // Compute the square root of Var: std = sqrt(var)
       "vfsqrt.b %[vStd], %[vVar];"
       : [vMean] "+&r"(vMean), [vVar] "+&r"(vVar), [vStd] "+&r"(vStd),
-    	[vInvM] "+&r"(vInvM), [vMeanSq] "+&r"(vMeanSq)
-      : [vSum] "r"(vSum), [vSumSq] "r"(vSumSq));
+    	  [vMeanSq] "+&r"(vMeanSq)
+      : [vSum] "r"(vSum), [vSumSq] "r"(vSumSq), [vInvM] "r"(vInvM));
 
-    dump_try(*(uint32_t*)&vVar);
-    dump_try(*(uint32_t*)&vStd);
+    //dump_try(*(uint32_t*)&vVar);
+    //dump_try(*(uint32_t*)&vStd);
 
     for (i = 0; i < M; i += 4) {
 
@@ -131,16 +83,16 @@ void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
       v4b aNorm0, aNorm1, aNorm2, aNorm3;
 
       asm volatile(
-    	// Compute: aVec0 - vMean
-    	"vfsub.b %[aNorm0], %[aVec0], %[vMean];"
-    	"vfsub.b %[aNorm1], %[aVec1], %[vMean];"
-      "vfsub.b %[aNorm2], %[aVec2], %[vMean];"
-      "vfsub.b %[aNorm3], %[aVec3], %[vMean];"
-    	// Compute: aNorm0 / vStd
-    	//"vfdiv.b %[aNorm0], %[aNorm0], %[vStd];"
-    	//"vfdiv.b %[aNorm1], %[aNorm1], %[vStd];"
-      //"vfdiv.b %[aNorm2], %[aNorm2], %[vStd];"
-      //"vfdiv.b %[aNorm3], %[aNorm3], %[vStd];"
+    	  // Compute: aVec0 - vMean
+    	  "vfsub.b %[aNorm0], %[aVec0], %[vMean];"
+    	  "vfsub.b %[aNorm1], %[aVec1], %[vMean];"
+        "vfsub.b %[aNorm2], %[aVec2], %[vMean];"
+        "vfsub.b %[aNorm3], %[aVec3], %[vMean];"
+    	  // Compute: aNorm0 / vStd
+    	  "vfdiv.b %[aNorm0], %[aNorm0], %[vStd];"
+    	  "vfdiv.b %[aNorm1], %[aNorm1], %[vStd];"
+        "vfdiv.b %[aNorm2], %[aNorm2], %[vStd];"
+        "vfdiv.b %[aNorm3], %[aNorm3], %[vStd];"
         : [aNorm0] "+&r"(aNorm0), [aNorm1] "+&r"(aNorm1), 
           [aNorm2] "+&r"(aNorm2), [aNorm3] "+&r"(aNorm3)
         : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1),
@@ -153,4 +105,4 @@ void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
       (*(v4b *)&B[(i + 3) * N + j]) = aNorm3;
     }
   }
-}*/
+}
