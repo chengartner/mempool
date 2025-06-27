@@ -12,6 +12,7 @@
 #pragma once
 #include "builtins_v2.h"
 
+/*
 // Matmul based on outer product between rows of A and cols of B
   // Use 4 cols of A (store 4 elements each) and 4 rows of B (store 4 elements each)
 void matmul_4x4_parallel_outer_f8vec(const __fp8 *__restrict__ A,
@@ -110,6 +111,95 @@ void matmul_4x4_parallel_outer_f8vec(const __fp8 *__restrict__ A,
       }
 
       //dump_try(*(uint32_t*)&sum0);
+
+      (*(v4b *)&C[i * P + k]) = sum0;
+      (*(v4b *)&C[(i + 1) * P + k]) = sum1;
+      (*(v4b *)&C[(i + 2) * P + k]) = sum2;
+      (*(v4b *)&C[(i + 3) * P + k]) = sum3;
+    }
+  }
+}*/
+
+// Matmul based on outer product between rows of A and cols of B
+  // Use 4 cols of A (store 4 elements each) and 4 rows of B (store 4 elements each)
+void matmul_4x4_parallel_outer_f8vec(const __fp8 *__restrict__ A,
+                                const __fp8 *__restrict__ B,
+                                __fp8 *__restrict__ C, uint32_t M,
+                                uint32_t N, uint32_t P, uint32_t core_id,
+                                uint32_t numThreads) {
+
+  uint32_t i = 0; // loop counter for M
+  uint32_t j = 0; // loop counter for N
+  uint32_t k = 0; // loop counter for P
+
+  const unsigned ShuffleMask0 = 0x04040404; // [a b c d] => [d d d d]
+  const unsigned ShuffleMask1 = 0x05050505; // [a b c d] => [c c c c]
+  const unsigned ShuffleMask2 = 0x06060606; // [a b c d] => [b b b b]
+  const unsigned ShuffleMask3 = 0x07070707; // [a b c d] => [a a a a]
+
+  for (k = core_id * 4; k < P; k += numThreads * 4) {
+    for (i = 0; i < M; i += 4) {
+      v4b sum0 = (v4b)0.0f;
+      v4b sum1 = (v4b)0.0f;
+      v4b sum2 = (v4b)0.0f;
+      v4b sum3 = (v4b)0.0f;
+      
+      for (j = 0; j < N; j += 4) {
+
+        v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
+        v4b aVec1 = *(v4b *)&(A[(i + 1) * N + j]);  // aVec1 = [a13 a12 a11 a10]
+        v4b aVec2 = *(v4b *)&(A[(i + 2) * N + j]);  // aVec2 = [a23 a22 a21 a20]
+        v4b aVec3 = *(v4b *)&(A[(i + 3) * N + j]);  // aVec3 = [a33 a32 a31 a30]
+        v4b bVec0 = *(v4b *)&(B[j * P + k]);        // bVec0 = [b03 b02 b01 b00]
+        v4b bVec1 = *(v4b *)&(B[(j + 1) * P + k]);  // bVec1 = [b13 b12 b11 b10]
+        v4b bVec2 = *(v4b *)&(B[(j + 2) * P + k]);  // bVec2 = [b23 b22 b21 b20]
+        v4b bVec3 = *(v4b *)&(B[(j + 3) * P + k]);  // bVec3 = [b33 b32 b31 b30]
+
+        v4b aTemp0, aTemp1, aTemp2, aTemp3;
+
+        asm volatile(
+            "pv.shuffle2.b %[aTemp0], %[aVec0], %[ShuffleMask0];" // aVec00 = [a00 a00 a00 a00] 
+            "pv.shuffle2.b %[aTemp1], %[aVec1], %[ShuffleMask0];" // aVec10 = [a10 a10 a10 a10]
+            "pv.shuffle2.b %[aTemp2], %[aVec2], %[ShuffleMask0];" // aVec20 = [a20 a20 a20 a20]
+            "pv.shuffle2.b %[aTemp3], %[aVec3], %[ShuffleMask0];" // aVec30 = [a30 a30 a30 a30]
+            "vfmac.b %[sum0], %[aTemp0], %[bVec0];"   // res0 += a00*b00 a00*b01 a00*b02 a00*b03
+            "vfmac.b %[sum1], %[aTemp1], %[bVec0];"   // res1 += a10*b00 a10*b01 a10*b02 a10*b03
+            "vfmac.b %[sum2], %[aTemp2], %[bVec0];"   // res2 += a20*b00 a20*b01 a20*b02 a20*b03
+            "vfmac.b %[sum3], %[aTemp3], %[bVec0];"   // res3 += a30*b00 a30*b01 a30*b02 a30*b03
+
+            "pv.shuffle2.b %[aTemp0], %[aVec0], %[ShuffleMask1];" // aVec01 = [a01 a01 a01 a01]
+            "pv.shuffle2.b %[aTemp1], %[aVec1], %[ShuffleMask1];" // aVec11 = [a11 a11 a11 a11]
+            "pv.shuffle2.b %[aTemp2], %[aVec2], %[ShuffleMask1];" // aVec21 = [a21 a21 a21 a21]
+            "pv.shuffle2.b %[aTemp3], %[aVec3], %[ShuffleMask1];" // aVec31 = [a31 a31 a31 a31]
+            "vfmac.b %[sum0], %[aTemp0], %[bVec1];"   // res0 += a01*b10 a01*b11 a01*b12 a01*b13
+            "vfmac.b %[sum1], %[aTemp1], %[bVec1];"   // res1 += a11*b10 a11*b11 a11*b12 a11*b13
+            "vfmac.b %[sum2], %[aTemp2], %[bVec1];"   // res2 += a21*b10 a21*b11 a21*b12 a21*b13
+            "vfmac.b %[sum3], %[aTemp3], %[bVec1];"   // res3 += a31*b10 a31*b11 a31*b12 a31*b13
+
+            "pv.shuffle2.b %[aTemp0], %[aVec0], %[ShuffleMask2];" // aVec02 = [a02 a02 a02 a02]
+            "pv.shuffle2.b %[aTemp1], %[aVec1], %[ShuffleMask2];" // aVec12 = [a12 a12 a12 a12]
+            "pv.shuffle2.b %[aTemp2], %[aVec2], %[ShuffleMask2];" // aVec22 = [a22 a22 a22 a22]
+            "pv.shuffle2.b %[aTemp3], %[aVec3], %[ShuffleMask2];" // aVec32 = [a32 a32 a32 a32]
+            "vfmac.b %[sum0], %[aTemp0], %[bVec2];"   // res0 += a02*b20 a02*b21 a02*b22 a02*b23
+            "vfmac.b %[sum1], %[aTemp1], %[bVec2];"   // res1 += a12*b20 a12*b21 a12*b22 a12*b23
+            "vfmac.b %[sum2], %[aTemp2], %[bVec2];"   // res2 += a22*b20 a22*b21 a22*b22 a22*b23
+            "vfmac.b %[sum3], %[aTemp3], %[bVec2];"   // res3 += a32*b20 a32*b21 a32*b22 a32*b23
+
+            "pv.shuffle2.b %[aTemp0], %[aVec0], %[ShuffleMask3];" // aVec03 = [a03 a03 a03 a03]
+            "pv.shuffle2.b %[aTemp1], %[aVec1], %[ShuffleMask3];" // aVec13 = [a13 a13 a13 a13]
+            "pv.shuffle2.b %[aTemp2], %[aVec2], %[ShuffleMask3];" // aVec23 = [a23 a23 a23 a23]
+            "pv.shuffle2.b %[aTemp3], %[aVec3], %[ShuffleMask3];" // aVec33 = [a33 a33 a33 a33]
+            "vfmac.b %[sum0], %[aTemp0], %[bVec3];"   // res0 += a03*b30 a03*b31 a03*b32 a03*b33
+            "vfmac.b %[sum1], %[aTemp1], %[bVec3];"   // res1 += a13*b30 a13*b31 a13*b32 a13*b33
+            "vfmac.b %[sum2], %[aTemp2], %[bVec3];"   // res2 += a23*b30 a23*b31 a23*b32 a23*b33
+            "vfmac.b %[sum3], %[aTemp3], %[bVec3];"   // res3 += a33*b30 a33*b31 a33*b32 a33*b33
+            : [aTemp0] "+&r"(aTemp0), [aTemp1] "+&r"(aTemp1), [aTemp2] "+&r"(aTemp2), [aTemp3] "+&r"(aTemp3),
+              [sum0] "+&r"(sum0), [sum1] "+&r"(sum1), [sum2] "+&r"(sum2), [sum3] "+&r"(sum3)
+            : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2), [aVec3] "r"(aVec3),
+              [bVec0] "r"(bVec0), [bVec1] "r"(bVec1), [bVec2] "r"(bVec2), [bVec3] "r"(bVec3),
+              [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
+              [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
+      }
 
       (*(v4b *)&C[i * P + k]) = sum0;
       (*(v4b *)&C[(i + 1) * P + k]) = sum1;
