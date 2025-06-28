@@ -10,7 +10,7 @@
 #include "builtins_v2.h"
 
 
-void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
+void batchnorm_parallel_2x4_f8vec(const __fp8 *__restrict__ A,
                                 __fp8 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {

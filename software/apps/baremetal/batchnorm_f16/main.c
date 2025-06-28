@@ -36,7 +36,7 @@ int main() {
 
   // Matrix Normalization
   mempool_start_benchmark();
-  batchnorm_parallel_f16vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  batchnorm_parallel_2x2_f16vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
