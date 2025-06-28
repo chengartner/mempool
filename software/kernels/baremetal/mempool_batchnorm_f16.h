@@ -22,9 +22,9 @@ void batchnorm_parallel_f16vec(const __fp16 *__restrict__ A,
   v2h vInvM;
 
   asm volatile(
-  	"vfcpka.h.s %[vInvM], %[InvM], %[InvM];" //TODO
-  	: [vInvM] "+&r"(vInvM)
-  	: [InvM] "r"(InvM));
+    "vfcpka.h.s %[vInvM], %[InvM], %[InvM];"
+    : [vInvM] "+&r"(vInvM)
+    : [InvM] "r"(InvM));
 
   for (j = core_id * 2; j < N; j += numThreads * 2) {
 
@@ -79,16 +79,16 @@ void batchnorm_parallel_f16vec(const __fp16 *__restrict__ A,
       v2h aNorm0, aNorm1, aNorm2, aNorm3;
 
       asm volatile(
-    	// Compute: aVec0 - vMean
-    	"vfsub.h %[aNorm0], %[aVec0], %[vMean];"
-    	"vfsub.h %[aNorm1], %[aVec1], %[vMean];"
-      "vfsub.h %[aNorm2], %[aVec2], %[vMean];"
-      "vfsub.h %[aNorm3], %[aVec3], %[vMean];"
-    	// Compute: aNorm0 / vStd
-    	"vfdiv.h %[aNorm0], %[aNorm0], %[vStd];"
-    	"vfdiv.h %[aNorm1], %[aNorm1], %[vStd];"
-      "vfdiv.h %[aNorm2], %[aNorm2], %[vStd];"
-      "vfdiv.h %[aNorm3], %[aNorm3], %[vStd];"
+    	  // Compute: aVec0 - vMean
+    	  "vfsub.h %[aNorm0], %[aVec0], %[vMean];"
+    	  "vfsub.h %[aNorm1], %[aVec1], %[vMean];"
+        "vfsub.h %[aNorm2], %[aVec2], %[vMean];"
+        "vfsub.h %[aNorm3], %[aVec3], %[vMean];"
+    	  // Compute: aNorm0 / vStd
+    	  "vfdiv.h %[aNorm0], %[aNorm0], %[vStd];"
+    	  "vfdiv.h %[aNorm1], %[aNorm1], %[vStd];"
+        "vfdiv.h %[aNorm2], %[aNorm2], %[vStd];"
+        "vfdiv.h %[aNorm3], %[aNorm3], %[vStd];"
         : [aNorm0] "+&r"(aNorm0), [aNorm1] "+&r"(aNorm1), 
           [aNorm2] "+&r"(aNorm2), [aNorm3] "+&r"(aNorm3)
         : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1),

@@ -70,9 +70,6 @@ void batchnorm_parallel_f8vec(const __fp8 *__restrict__ A,
     	  [vMeanSq] "+&r"(vMeanSq)
       : [vSum] "r"(vSum), [vSumSq] "r"(vSumSq), [vInvM] "r"(vInvM));
 
-    //dump_try(*(uint32_t*)&vVar);
-    //dump_try(*(uint32_t*)&vStd);
-
     for (i = 0; i < M; i += 4) {
 
       v4b aVec0 = *(v4b *)&(A[i * N + j]);        // aVec0 = [a03 a02 a01 a00]
