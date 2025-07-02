@@ -38,12 +38,12 @@ int main() {
 
   // Matrix Normalization
   mempool_start_benchmark();
-  layernorm_parallel_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  layernorm_parallel_2x8_f8vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
 
-  mempool_check_f8(matrix_b, l2_B, matrix_M * matrix_N, 0x34, 1); // tol = 0.25 = 0x34 (__fp8)
+  mempool_check_f8(matrix_b, l2_B, matrix_M * matrix_N, 0x34, 0); // tol = 0.25 = 0x34 (__fp8)
   mempool_barrier(num_cores);
   return 0;
 }
