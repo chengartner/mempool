@@ -208,7 +208,7 @@ void matmul_4x2_parallel_f16vec(const __fp16 *__restrict__ pSrcA,
         v2h bVecTemp0 = *(v2h *)&(pSrcB[j * P + k]);
         v2h bVecTemp1 = *(v2h *)&(pSrcB[(j + 1) * P + k]);
         v2h bVec0, bVec1;
-        dump_try(*(uint32_t*)&bVecTemp0);
+
         asm volatile(
           // Note: pv.pack.h packs the upper 2 bytes of the source register
           // Note: pv.pack packs the lower 2 bytes of the source register
@@ -222,15 +222,13 @@ void matmul_4x2_parallel_f16vec(const __fp16 *__restrict__ pSrcA,
           "vfdotpex.s.h %[sum11], %[aVec1], %[bVec1];"
           "vfdotpex.s.h %[sum21], %[aVec2], %[bVec1];"
           "vfdotpex.s.h %[sum31], %[aVec3], %[bVec1];"
-          : [sum00] "+&r"(sum00), [sum01] "+&r"(sum01), [sum10] "+&r"(sum10),
-            [sum11] "+&r"(sum11), [sum20] "+&r"(sum20), [sum21] "+&r"(sum21),
-            [sum30] "+&r"(sum30), [sum31] "+&r"(sum31), [bVec0] "=&r"(bVec0),
+          : [sum00] "=&r"(sum00), [sum01] "=&r"(sum01), [sum10] "=&r"(sum10),
+            [sum11] "=&r"(sum11), [sum20] "=&r"(sum20), [sum21] "=&r"(sum21),
+            [sum30] "=&r"(sum30), [sum31] "=&r"(sum31), [bVec0] "+&r"(bVec0), 
             [bVec1] "+&r"(bVec1)
           : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2),
-            [aVec3] "r"(aVec3), [bVecTemp0] "r"(bVecTemp0),
-            [bVecTemp1] "r"(bVecTemp1)
+            [aVec3] "r"(aVec3), [bVecTemp0] "r"(bVecTemp0), [bVecTemp1] "r"(bVecTemp1)
           :);
-        dump_try(*(uint32_t*)&bVec0);
       }
       v2h res0, res1, res2, res3;
       asm volatile("vfcpka.h.s %[res0], %[sum01], %[sum00];"
@@ -247,6 +245,119 @@ void matmul_4x2_parallel_f16vec(const __fp16 *__restrict__ pSrcA,
       (*(v2h *)&pDstC[(i + 1) * P + k]) = res1;
       (*(v2h *)&pDstC[(i + 2) * P + k]) = res2;
       (*(v2h *)&pDstC[(i + 3) * P + k]) = res3;
+    }
+  }
+}
+
+void matmul_4x4_parallel_f16vec(const __fp16 *__restrict__ pSrcA,
+                                const __fp16 *__restrict__ pSrcB,
+                                __fp16 *__restrict__ pDstC, uint32_t M,
+                                uint32_t N, uint32_t P, uint32_t core_id,
+                                uint32_t numThreads) {
+
+  uint32_t i = 0; // loop counter for M
+  uint32_t j = 0; // loop counter for N
+  uint32_t k = 0; // loop counter for P
+
+  for (k = core_id * 4; k < P; k += numThreads * 4) {
+    for (i = 0; i < M; i += 4) {
+      float volatile sum00 = 0.0f;
+      float volatile sum01 = 0.0f;
+      float volatile sum02 = 0.0f;
+      float volatile sum03 = 0.0f;
+      float volatile sum10 = 0.0f;
+      float volatile sum11 = 0.0f;
+      float volatile sum12 = 0.0f;
+      float volatile sum13 = 0.0f;
+      float volatile sum20 = 0.0f;
+      float volatile sum21 = 0.0f;
+      float volatile sum22 = 0.0f;
+      float volatile sum23 = 0.0f;
+      float volatile sum30 = 0.0f;
+      float volatile sum31 = 0.0f;
+      float volatile sum32 = 0.0f;
+      float volatile sum33 = 0.0f;
+      for (j = 0; j < N; j += 2) {
+
+        v2h bVecTemp00 = *(v2h *)&(pSrcB[j * P + k]);
+        v2h bVecTemp01 = *(v2h *)&(pSrcB[(j + 1) * P + k]);
+        v2h bVecTemp10 = *(v2h *)&(pSrcB[j * P + (k + 2)]);
+        v2h bVecTemp11 = *(v2h *)&(pSrcB[(j + 1) * P + (k + 2)]);
+        v2h bVec00, bVec01, bVec10, bVec11;
+        asm volatile(
+          // Note: pv.pack.h packs the upper 2 bytes of the source register
+          // Note: pv.pack packs the lower 2 bytes of the source register
+          "pv.pack.h %[bVec00], %[bVecTemp01], %[bVecTemp00];"
+          "pv.pack %[bVec01], %[bVecTemp01], %[bVecTemp00];"
+          "pv.pack.h %[bVec10], %[bVecTemp11], %[bVecTemp10];"
+          "pv.pack %[bVec11], %[bVecTemp11], %[bVecTemp10];"
+          : [bVec00] "=&r"(bVec00), [bVec01] "=&r"(bVec01), 
+            [bVec10] "=&r"(bVec10), [bVec11] "=&r"(bVec11)
+          : [bVecTemp00] "r"(bVecTemp00), [bVecTemp01] "r"(bVecTemp01), 
+            [bVecTemp10] "r"(bVecTemp10), [bVecTemp11] "r"(bVecTemp11));
+
+        v2h aVec0 = *(v2h *)&(pSrcA[i * N + j]);
+        v2h aVec1 = *(v2h *)&(pSrcA[(i + 1) * N + j]);
+        v2h aVec2 = *(v2h *)&(pSrcA[(i + 2) * N + j]);
+        v2h aVec3 = *(v2h *)&(pSrcA[(i + 3) * N + j]);
+
+        asm volatile(
+          "vfdotpex.s.h %[sum00], %[aVec0], %[bVec00];"
+          "vfdotpex.s.h %[sum10], %[aVec1], %[bVec00];"
+          "vfdotpex.s.h %[sum20], %[aVec2], %[bVec00];"
+          "vfdotpex.s.h %[sum30], %[aVec3], %[bVec00];"
+          "vfdotpex.s.h %[sum01], %[aVec0], %[bVec01];"
+          "vfdotpex.s.h %[sum11], %[aVec1], %[bVec01];"
+          "vfdotpex.s.h %[sum21], %[aVec2], %[bVec01];"
+          "vfdotpex.s.h %[sum31], %[aVec3], %[bVec01];"
+          
+          "vfdotpex.s.h %[sum02], %[aVec0], %[bVec10];"
+          "vfdotpex.s.h %[sum12], %[aVec1], %[bVec10];"
+          "vfdotpex.s.h %[sum22], %[aVec2], %[bVec10];"
+          "vfdotpex.s.h %[sum32], %[aVec3], %[bVec10];"
+          "vfdotpex.s.h %[sum03], %[aVec0], %[bVec11];"
+          "vfdotpex.s.h %[sum13], %[aVec1], %[bVec11];"
+          "vfdotpex.s.h %[sum23], %[aVec2], %[bVec11];"
+          "vfdotpex.s.h %[sum33], %[aVec3], %[bVec11];"
+          : [sum00] "=&r"(sum00), [sum01] "=&r"(sum01), [sum10] "=&r"(sum10),
+            [sum11] "=&r"(sum11), [sum20] "=&r"(sum20), [sum21] "=&r"(sum21),
+            [sum30] "=&r"(sum30), [sum31] "=&r"(sum31), [sum02] "=&r"(sum02), 
+            [sum03] "=&r"(sum03), [sum12] "=&r"(sum12), [sum13] "=&r"(sum13), 
+            [sum22] "=&r"(sum22), [sum23] "=&r"(sum23), [sum32] "=&r"(sum32), 
+            [sum33] "=&r"(sum33)
+          : [aVec0] "r"(aVec0), [aVec1] "r"(aVec1), [aVec2] "r"(aVec2),
+            [aVec3] "r"(aVec3), [bVec00] "r"(bVec00), [bVec01] "r"(bVec01), 
+            [bVec10] "r"(bVec10), [bVec11] "r"(bVec11));
+      }
+      v2h res00, res01, res02, res03;
+      v2h res10, res11, res12, res13;
+      asm volatile(
+        "vfcpka.h.s %[res00], %[sum01], %[sum00];"
+        "vfcpka.h.s %[res01], %[sum11], %[sum10];"
+        "vfcpka.h.s %[res02], %[sum21], %[sum20];"
+        "vfcpka.h.s %[res03], %[sum31], %[sum30];"
+        "vfcpka.h.s %[res10], %[sum03], %[sum02];"
+        "vfcpka.h.s %[res11], %[sum13], %[sum12];"
+        "vfcpka.h.s %[res12], %[sum23], %[sum22];"
+        "vfcpka.h.s %[res13], %[sum33], %[sum32];"
+        : [res00] "=&r"(res00), [res01] "=&r"(res01), [res02] "=&r"(res02),
+          [res03] "=&r"(res03), [res10] "=&r"(res10), [res11] "=&r"(res11),
+          [res12] "=&r"(res12), [res13] "=&r"(res13)
+        : [sum00] "r"(sum00), [sum01] "r"(sum01), [sum10] "r"(sum10),
+          [sum11] "r"(sum11), [sum20] "r"(sum20), [sum21] "r"(sum21),
+          [sum30] "r"(sum30), [sum31] "r"(sum31), [sum02] "r"(sum02), 
+          [sum03] "r"(sum03), [sum12] "r"(sum12), [sum13] "r"(sum13), 
+          [sum22] "r"(sum22), [sum23] "r"(sum23), [sum32] "r"(sum32),
+          [sum33] "r"(sum33));
+
+      (*(v2h *)&pDstC[i * P + k]) = res00;
+      (*(v2h *)&pDstC[(i + 1) * P + k]) = res01;
+      (*(v2h *)&pDstC[(i + 2) * P + k]) = res02;
+      (*(v2h *)&pDstC[(i + 3) * P + k]) = res03;
+      (*(v2h *)&pDstC[i * P + (k + 2)]) = res10;
+      (*(v2h *)&pDstC[(i + 1) * P + (k + 2)]) = res11;
+      (*(v2h *)&pDstC[(i + 2) * P + (k + 2)]) = res12;
+      (*(v2h *)&pDstC[(i + 3) * P + (k + 2)]) = res13;
     }
   }
 }
