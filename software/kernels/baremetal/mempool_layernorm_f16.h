@@ -10,7 +10,7 @@
 #include "builtins_v2.h"
 
 
-void layernorm_parallel_f16vec(const __fp16 *__restrict__ A,
+void layernorm_parallel_2x4_f16vec(const __fp16 *__restrict__ A,
                                 __fp16 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {

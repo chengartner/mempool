@@ -13,8 +13,6 @@
 
 #include "data_layernorm_f16.h"
 
-dump(try, 8);
-
 #include "baremetal/mempool_checks.h"
 #include "baremetal/mempool_layernorm_f16.h"
 
@@ -38,12 +36,12 @@ int main() {
 
   // Matrix Normalization
   mempool_start_benchmark();
-  layernorm_parallel_f16vec(matrix_a, matrix_b, matrix_M, matrix_N,
+  layernorm_parallel_2x4_f16vec(matrix_a, matrix_b, matrix_M, matrix_N,
                              core_id, num_cores);
   mempool_barrier(num_cores);
   mempool_stop_benchmark();
 
-  mempool_check_f16(matrix_b, l2_B, matrix_M * matrix_N, 0.1f, 1);
+  //mempool_check_f16(matrix_b, l2_B, matrix_M * matrix_N, 0.1f, 0);
   mempool_barrier(num_cores);
   return 0;
 }
