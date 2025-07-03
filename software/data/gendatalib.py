@@ -750,7 +750,7 @@ def generate_flayernorm(my_type=np.float32, defines={}):
         matrix_N = defines['matrix_N']
 
         # Create input matrix
-        A = (np.random.rand(matrix_M, matrix_N) - 0.5).astype(np.float16)
+        A = (np.random.rand(matrix_M, matrix_N) - 0.25).astype(np.float16)
         B = np.zeros((matrix_M, matrix_N)).astype(np.float16)
         # Cast the correct type
         A = ff.array(A, 'e5m2')
@@ -759,10 +759,19 @@ def generate_flayernorm(my_type=np.float32, defines={}):
         # Normalize matrix A (using LayerNorm)
         for i in range(matrix_M):  # Loop over each sample (row)
             row = A[i]
+            # Compute: mean = sum / N
             mean = np.sum(row) / matrix_N
-            diff = row - mean
-            var = np.sum(diff * diff) / matrix_N
+            # Compute E[x^2]
+            row_sq = np.square(row)
+            expected = np.sum(row_sq) / matrix_N
+            # Compute mean^2
+            mean_sq = np.square(mean)
+            # Compute: var = E[x^2] - mean^2
+            var = expected - mean_sq
+            # Compute: std = sqrt(var)
             std = np.sqrt(var)
+
+            diff = row - mean
             B[i] = (diff) / std
 
         # Flatten the matrices into 1D arrays
@@ -835,7 +844,9 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
         # Calculate the row-wise softmax
         for i in range(matrix_M):
             a_max = np.max(A[i])
-            numerator = np.exp(A[i] - a_max)
+            # Approximate exp with Taylor series
+            diff = A[i] - a_max
+            numerator = 1 + diff + 0.5*np.square(diff) + 0.167*np.power(diff, 3)
             denominator = np.sum(numerator)
             B[i] = numerator / denominator
 
@@ -857,13 +868,13 @@ def generate_fencoder(my_type=np.float32, defines={}):
         dim_h = dim_e // num_heads
 
         # Create empty matrices to store result
-        K_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        K_init = np.ones((dim_s, dim_h)).astype(np.float16)
         K_init = ff.array(K_init, 'e5m2')
-        Q_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        Q_init = np.ones((dim_s, dim_h)).astype(np.float16)
         Q_init = ff.array(Q_init, 'e5m2')
-        V_init = np.zeros((dim_s, dim_h)).astype(np.float16)
+        V_init = np.ones((dim_s, dim_h)).astype(np.float16)
         V_init = ff.array(V_init, 'e5m2')
-        A_init = np.zeros((dim_s, dim_s)).astype(np.float16)
+        A_init = np.ones((dim_s, dim_s)).astype(np.float16)
         A_init = ff.array(A_init, 'e5m2')
 
         # Create input matrix
@@ -940,13 +951,13 @@ def generate_fencoder(my_type=np.float32, defines={}):
         # Define dimension
         dim_s = defines['dim_s']  # Sequence length
         dim_e = defines['dim_e']  # Embedding dimension
-        num_heads = defines['num_heads']
-        dim_h = dim_e // num_heads
+        dim_h = defines['dim_h']
+        num_heads = dim_e // dim_h
 
         # Create empty matrices to store result
-        K_init = np.zeros((dim_s, dim_h)).astype(my_type)
-        Q_init = np.zeros((dim_s, dim_h)).astype(my_type)
-        V_init = np.zeros((dim_s, dim_h)).astype(my_type)
+        K_init = np.zeros((dim_s, dim_e)).astype(my_type)
+        Q_init = np.zeros((dim_s, dim_e)).astype(my_type)
+        V_init = np.zeros((dim_s, dim_e)).astype(my_type)
         A_init = np.zeros((dim_s, dim_s)).astype(my_type)
 
         # Create input matrix
@@ -991,7 +1002,7 @@ def generate_fencoder(my_type=np.float32, defines={}):
         O = np.reshape(O, (dim_s, dim_e))
 
         # Scale output matrix
-        O_scaled = np.matmul(O, Wo) #??????
+        O_scaled = np.matmul(O, Wo)
 
         # 4) Normalize output matrix (using LayerNorm)
         for i in range(dim_s):
@@ -1008,6 +1019,10 @@ def generate_fencoder(my_type=np.float32, defines={}):
         Wq = np.reshape(Wq, (dim_e * dim_e), order='C')
         Wv = np.reshape(Wv, (dim_e * dim_e), order='C')
         Wo = np.reshape(Wo, (dim_e * dim_e), order='C')
+        K_init = np.reshape(K_init, (dim_s * dim_e), order='C')
+        Q_init = np.reshape(Q_init, (dim_s * dim_e), order='C')
+        V_init = np.reshape(V_init, (dim_s * dim_e), order='C')
+        A_init = np.reshape(A_init, (dim_s * dim_s), order='C')
         Result = np.reshape(Result, (dim_s * dim_e), order='C')
 
         return [Input, Wk, Wq, Wv, Wo, K_init, Q_init, V_init, 
