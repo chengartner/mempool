@@ -9,7 +9,7 @@
 #pragma once
 #include "builtins_v2.h"
 
-void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
+void softmax_parallel_2x8_f8vec(const __fp8 *__restrict__ A,
                                 __fp8 *__restrict__ B, uint32_t M,
                                 uint32_t N, uint32_t core_id,
                                 uint32_t numThreads) {
@@ -22,20 +22,23 @@ void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
   const unsigned ShuffleMask2 = 0x06060606; // [a b c d] => [b b b b]
   const unsigned ShuffleMask3 = 0x07070707; // [a b c d] => [a a a a]
 
+  float Sixth = 0.167f;
   float Half = 0.5f;
   float One = 1.0f;
   float init = 0.5f;
-  v4b vHalf, vOne, max_init;
+  v4b vSixth, vHalf, vOne, max_init;
 
   asm volatile(
+    "vfcpka.b.s %[vSixth], %[Sixth], %[Sixth];"
     "vfcpka.b.s %[vHalf], %[Half], %[Half];"
     "vfcpka.b.s %[vOne], %[One], %[One];"
     "vfcpka.b.s %[max_init], %[init], %[init];"
+    "vfcpkb.b.s %[vSixth], %[Sixth], %[Sixth];"
     "vfcpkb.b.s %[vHalf], %[Half], %[Half];"
     "vfcpkb.b.s %[vOne], %[One], %[One];"
     "vfcpkb.b.s %[max_init], %[init], %[init];"
-    : [vHalf] "+&r"(vHalf), [vOne] "+&r"(vOne), [max_init] "+&r"(max_init)
-    : [Half] "r"(Half), [One] "r"(One), [init] "r"(init));
+    : [vSixth] "+&r"(vSixth), [vHalf] "+&r"(vHalf), [vOne] "+&r"(vOne), [max_init] "+&r"(max_init)
+    : [Sixth] "r"(Sixth), [Half] "r"(Half), [One] "r"(One), [init] "r"(init));
 
   for (i = core_id * 2; i < M; i += numThreads * 2) {
     
@@ -93,8 +96,8 @@ void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
       : [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
         [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
 
-    dump_try(*(uint32_t*)&max0);
-    dump_try(*(uint32_t*)&max1);
+    //dump_try(*(uint32_t*)&max0);
+    //dump_try(*(uint32_t*)&max1);
 
   // 2) Compute exp(x - max)
     v4b vSum0 = (v4b)0.0f;
@@ -155,7 +158,7 @@ void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
         : [vSum0] "+&r"(vSum0), [vSum1] "+&r"(vSum1), [temp0] "+&r"(temp0), [temp1] "+&r"(temp1) 
         : [exp00] "r"(exp00), [exp01] "r"(exp01), [exp10] "r"(exp10), [exp11] "r"(exp11));
 
-      dump_try(*(uint32_t*)&exp00);
+      //dump_try(*(uint32_t*)&exp00);
 
       // Store temporary variables
       (*(v4b *)&B[i * N + j]) = exp00;
@@ -187,8 +190,6 @@ void softmax_parallel_f8vec(const __fp8 *__restrict__ A,
         [sum12] "+&r"(sum12), [sum13] "+&r"(sum13)
       : [ShuffleMask0] "r"(ShuffleMask0), [ShuffleMask1] "r"(ShuffleMask1),
         [ShuffleMask2] "r"(ShuffleMask2), [ShuffleMask3] "r"(ShuffleMask3));
-
-    dump_try(*(uint32_t*)&vSum0);
 
   // 3) Divide by the row-wise sum
     for (j = 0; j < N; j += 8) {
