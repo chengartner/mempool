@@ -823,7 +823,9 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
         # Calculate the row-wise softmax
         for i in range(matrix_M):
             a_max = np.max(A[i])
-            numerator = np.exp(A[i] - a_max)
+            # Approximate exp with Taylor series
+            diff = A[i] - a_max
+            numerator = 1 + diff + 0.5*np.square(diff) + 0.167*np.square(diff)*diff
             denominator = np.sum(numerator)
             B[i] = numerator / denominator
 
